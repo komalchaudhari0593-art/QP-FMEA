@@ -1,0 +1,4314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JOST AI FMEA Prompt & Package Generator Workstation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <script>if (typeof window !== 'undefined') { window.learningToolsRuntime = window.learningToolsRuntime || {}; }</script>
+  <style>
+    :root {
+      --bg-primary: #0b0f19;
+      --bg-card: #131b2e;
+      --bg-card-hover: #1c2842;
+      --bg-input: #0a1120;
+      --border-color: #243456;
+      --accent-color: #0284c7;
+      --accent-gradient: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+      --accent-purple: #7c3aed;
+      --accent-green: #10b981;
+      --accent-warning: #f59e0b;
+      --accent-danger: #ef4444;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+      --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.5;
+      min-height: 100vh;
+      padding-bottom: 40px;
+    }
+
+    /* Top Navigation Header */
+    .header {
+      background: rgba(19, 27, 46, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-title {
+      font-size: 18px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .header-actions .btn {
+      font-size: 13.5px;
+      padding: 5px 9px;
+      min-width: 32px;
+      height: 30px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Main Container & Layout */
+    .container {
+      max-width: 1600px;
+      margin: 20px auto;
+      padding: 0 16px;
+    }
+
+    /* 3-Column Layout for Folder Explorer + Prompts + Ingestion */
+    .grid-3col {
+      display: grid;
+      grid-template-columns: 350px 1fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 1280px) {
+      .grid-3col { grid-template-columns: 310px 1fr; }
+    }
+
+    @media (max-width: 960px) {
+      .grid-3col { grid-template-columns: 1fr; }
+    }
+
+    /* Cards & Panels */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: var(--shadow-lg);
+      margin-bottom: 20px;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #f1f5f9;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .step-badge {
+      background: var(--accent-gradient);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Form Controls */
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 5px;
+    }
+
+    .form-control {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: #fff;
+      font-family: var(--font-sans);
+      font-size: 12.5px;
+      padding: 9px 12px;
+      transition: all 0.2s ease;
+    }
+
+    .form-control:focus {
+      outline: none;
+      border-color: var(--accent-color);
+      box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.2);
+    }
+
+    textarea.form-control {
+      min-height: 80px;
+      resize: vertical;
+    }
+
+    textarea.code-textarea {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.5;
+      background: #060a12;
+    }
+
+    /* Buttons & Actions */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: var(--accent-gradient);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+    }
+
+    .btn-primary:hover { opacity: 0.95; transform: translateY(-1px); }
+
+    .btn-purple {
+      background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+    }
+
+    .btn-purple:hover { opacity: 0.95; transform: translateY(-1px); }
+
+    .btn-green {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+
+    .btn-green:hover { opacity: 0.95; transform: translateY(-1px); }
+
+    .btn-secondary {
+      background: #1e293b;
+      color: #cbd5e1;
+      border-color: #334155;
+    }
+
+    .btn-secondary:hover { background: #334155; color: #fff; }
+
+    .btn-sm { padding: 5px 10px; font-size: 11px; }
+
+    .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    /* Prompt Output Boxes */
+    .prompt-box-container {
+      position: relative;
+      margin-bottom: 14px;
+    }
+
+    .prompt-header-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #0f172a;
+      border: 1px solid var(--border-color);
+      border-bottom: none;
+      border-radius: 8px 8px 0 0;
+      padding: 8px 12px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .prompt-content {
+      background: #060a12;
+      border: 1px solid var(--border-color);
+      border-radius: 0 0 8px 8px;
+      padding: 12px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: #38bdf8;
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* Table Styling */
+    .table-responsive {
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11.5px;
+      text-align: left;
+    }
+
+    .table th {
+      background: #0f172a;
+      color: var(--text-secondary);
+      padding: 8px 10px;
+      font-weight: 600;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #1e293b;
+      color: var(--text-primary);
+      vertical-align: middle;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 9.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .badge-blue { background: rgba(2, 132, 199, 0.2); color: #38bdf8; border: 1px solid rgba(2, 132, 199, 0.4); }
+    .badge-purple { background: rgba(124, 58, 237, 0.2); color: #c084fc; border: 1px solid rgba(124, 58, 237, 0.4); }
+    .badge-green { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
+    .badge-amber { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+    .badge-gray { background: rgba(100, 116, 139, 0.2); color: #94a3b8; border: 1px solid rgba(100, 116, 139, 0.4); }
+
+    /* Toast Notification */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #0284c7;
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      box-shadow: var(--shadow-lg);
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .help-box {
+      background: rgba(2, 132, 199, 0.1);
+      border: 1px solid rgba(2, 132, 199, 0.3);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: #93c5fd;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .sync-box {
+      background: rgba(124, 58, 237, 0.12);
+      border: 1px solid rgba(124, 58, 237, 0.4);
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 11.5px;
+      color: #c084fc;
+      margin-top: 10px;
+    }
+
+    /* Modal Dialog Styling */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(8px);
+      z-index: 999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.3s ease;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-content {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 980px;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+      overflow: hidden;
+    }
+
+    .modal-header {
+      padding: 16px 20px;
+      background: #0f172a;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .modal-close {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 24px;
+      cursor: pointer;
+      line-height: 1;
+      transition: color 0.2s;
+    }
+
+    .modal-close:hover { color: #fff; }
+
+    .modal-body {
+      padding: 20px;
+      overflow-y: auto;
+      font-size: 12.5px;
+      color: #cbd5e1;
+      line-height: 1.6;
+    }
+
+    /* FOLDER TREE EXPLORER VIEW STYLING */
+    .folder-tree-container {
+      background: #060a12;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 8px 6px;
+      max-height: 600px;
+      overflow-y: auto;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+    }
+
+    .folder-tree-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      user-select: none;
+      margin-bottom: 2px;
+      transition: all 0.15s ease;
+      border: 1px solid transparent;
+    }
+
+    .folder-tree-row:hover {
+      background: #1e293b;
+      border-color: #334155;
+    }
+
+    .folder-tree-row.active {
+      background: rgba(2, 132, 199, 0.2);
+      border-color: #38bdf8;
+      color: #fff;
+    }
+
+    .folder-tree-row.completed {
+      border-left: 3px solid var(--accent-green);
+    }
+
+    .folder-tree-row.locked {
+      opacity: 0.55;
+      cursor: not-allowed;
+      background: rgba(15, 23, 42, 0.4);
+    }
+
+    .folder-toggle-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 10px;
+      cursor: pointer;
+      width: 14px;
+      height: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .folder-toggle-btn:hover { color: #fff; }
+
+    .tree-indent-prefix {
+      color: #475569;
+      font-family: monospace;
+      margin-right: 4px;
+    }
+
+    .progress-bar-bg {
+      background: #1e293b;
+      height: 8px;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 6px;
+      margin-bottom: 12px;
+    }
+
+    .progress-bar-fill {
+      background: linear-gradient(90deg, #10b981 0%, #34d399 100%);
+      height: 100%;
+      width: 0%;
+      transition: width 0.4s ease;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Hidden File Input for Loading Workstation Sessions -->
+  <input type="file" id="loadSessionFileInput" accept=".json,.jostws" style="display:none" onchange="loadWorkstationSessionFile(event)">
+  <!-- Hidden File Input for Importing Structure Tree JSON -->
+  <input type="file" id="importStructureTreeFileInput" accept=".json" style="display:none" onchange="handleImportStructureTreeFile(event)">
+
+  <!-- Top Header Navigation -->
+  <header class="header">
+    <div class="brand-logo">
+      <div style="background: var(--accent-gradient); width: 36px; height: 36px; border-radius: 8px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px; color:#fff;">J</div>
+      <div>
+        <div class="brand-title">JOST AI FMEA Prompt & Package Assistant</div>
+        <div class="brand-subtitle">Top-to-Bottom Orchestrator & Master Prompt Library Manager</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-purple btn-sm" onclick="openMasterPromptLibraryModal()" title="Master Prompt Library">📜</button>
+      <button class="btn btn-purple btn-sm" onclick="openPredefinedControlsModal()" title="DVP Controls">🛡️</button>
+      <button class="btn btn-purple btn-sm" onclick="openStructureTreeModal()" title="Folder Tree">📁</button>
+      
+      <!-- Save & Load Session State Actions -->
+      <button class="btn btn-secondary btn-sm" onclick="saveWorkstationSessionFile()" title="Save Session">💾</button>
+      <button class="btn btn-secondary btn-sm" onclick="triggerLoadSessionFile()" title="Open Session">📂</button>
+      
+      <button class="btn btn-secondary btn-sm" onclick="openUserGuideModal()" title="Guide">📖</button>
+      <button class="btn btn-secondary btn-sm" onclick="resetWorkstationSession()" title="Reset">🔄</button>
+      <button class="btn btn-green btn-sm" onclick="exportFinalFmeaPackageJSON()" title="Generate Package">💾</button>
+      <button class="btn btn-danger btn-sm" onclick="closeEmbeddedWindow()" title="Close Workstation" style="background: #dc2626; color: #fff; font-weight: 700; border: none;">✕</button>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <div class="help-box">
+      <div>
+        <strong>📜 Master Prompt Library Active:</strong> Select between built-in standard prompts or your custom CFT Automotive DFMEA prompts!
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-purple btn-sm" onclick="autoSelectNextInSequence()">
+          ▶️ Auto-Next Component
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="openMasterPromptLibraryModal()">
+          📜 Manage Prompts
+        </button>
+      </div>
+    </div>
+
+    <!-- 3-COLUMN WORKBENCH LAYOUT -->
+    <div class="grid-3col">
+
+      <!-- COLUMN 1: FOLDER TREE EXPLORER VISUALIZER (TOP-TO-BOTTOM ORCHESTRATION) -->
+      <div>
+        <div class="card" style="height: calc(100% - 20px);">
+          <div class="card-header">
+            <div class="card-title">
+              <span class="step-badge" style="background: var(--accent-purple);">Explorer</span>
+              <span>Structure Tree View</span>
+            </div>
+            <div style="display:flex; gap:4px;">
+              <button class="btn btn-purple btn-sm" onclick="openPasteStructureTreeJsonModal()" title="Paste JSON text to create tree">📋 Paste</button>
+              <button class="btn btn-blue btn-sm" onclick="triggerImportStructureTree()" title="Import tree from JSON">📥 Import</button>
+              <button class="btn btn-purple btn-sm" onclick="openStructureTreeModal()">➕ Manage</button>
+            </div>
+          </div>
+
+          <!-- Progress Bar -->
+          <div style="display:flex; align-items:center; justify-content:space-between; font-size:11px; font-weight:700; color:var(--text-secondary);">
+            <span>Strict Top-to-Bottom Progress:</span>
+            <span id="treeProgressPercentText" style="color:var(--accent-green);">0% (0/0)</span>
+          </div>
+          <div class="progress-bar-bg">
+            <div id="treeProgressBarFill" class="progress-bar-fill"></div>
+          </div>
+
+          <button class="btn btn-primary btn-sm" style="width:100%; margin-bottom:10px;" onclick="autoSelectNextInSequence()">
+            ▶️ Focus Next Eligible Node
+          </button>
+
+          <!-- Main Page Folder Tree Container -->
+          <div id="mainPageTreeVisualizerContainer" class="folder-tree-container">
+            <!-- Dynamic Folder Tree rendered here -->
+          </div>
+
+        </div>
+      </div>
+
+      <!-- COLUMN 2: STEP 1 & STEP 2 (PROMPT GENERATION & COPY) -->
+      <div>
+        
+        <!-- STEP 1: Component Input -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <span class="step-badge">Step 1</span>
+              <span>Component Details</span>
+            </div>
+            <span id="selectedNodeStatusBadge" class="badge badge-amber">⚪ Not Selected</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Component / Assembly Name</label>
+            <input type="text" id="compName" class="form-control" placeholder="e.g. Electric Traction Motor Inverter" value="Electric Traction Motor Inverter" oninput="generateAiPrompts()">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Part Number / Reference Code</label>
+            <input type="text" id="compPartNo" class="form-control" placeholder="e.g. INV-400V-800" value="INV-400V-800" oninput="generateAiPrompts()">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Component Description & Operational Scope</label>
+            <textarea id="compDesc" class="form-control" placeholder="Describe component, function, operating environment..." oninput="generateAiPrompts()">Converts 400V DC battery power to 3-phase AC power to drive traction motor. Mounted underhood, subject to thermal cycling (-40°C to +105°C).</textarea>
+          </div>
+
+          <div class="form-group" style="display:flex; align-items:center; justify-content:space-between; background:#0f172a; padding:8px 10px; border-radius:8px; border:1px solid var(--border-color);">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <input type="checkbox" id="compIsAssembly" style="width:16px; height:16px; cursor:pointer;" checked onchange="generateAiPrompts()">
+              <label for="compIsAssembly" class="form-label" style="margin-bottom:0; cursor:pointer; font-weight:700; color:#f8fafc; font-size:11px;">
+                📁 Assembly / Sub-System Folder (Joint & Process mode)
+              </label>
+            </div>
+          </div>
+
+          <!-- Predefined Controls Mode Quick Toggle Indicator -->
+          <div style="display:flex; align-items:center; justify-content:space-between; background:rgba(124,58,237,0.12); padding:8px 10px; border-radius:8px; border:1px solid rgba(124,58,237,0.4); margin-bottom:14px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <input type="checkbox" id="chkPredefinedMode" style="width:16px; height:16px; cursor:pointer;" onchange="togglePredefinedModeFromCheckbox(this.checked)">
+              <label for="chkPredefinedMode" class="form-label" style="margin-bottom:0; cursor:pointer; font-weight:700; color:#c084fc; font-size:11px;">
+                🛡️ Enforce Predefined Controls Mode (DVP & Control Plan)
+              </label>
+            </div>
+            <button class="btn btn-purple btn-sm" style="padding:2px 6px; font-size:10px;" onclick="openPredefinedControlsModal()">⚙️ Manage List</button>
+          </div>
+
+          <button id="btnGeneratePrompts" class="btn btn-primary" style="width: 100%;" onclick="generateAiPrompts()">
+            ⚡ Generate Copilot / ChatGPT Prompts
+          </button>
+        </div>
+
+        <!-- STEP 2: AI Prompts Display & Copy -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <span class="step-badge" style="background: var(--accent-purple);">Step 2</span>
+              <span>Copy Prompts to AI Tool</span>
+            </div>
+          </div>
+
+          <!-- Master System Prompt Selection Bar -->
+          <div class="form-group" style="margin-bottom:10px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+              <label class="form-label" style="margin-bottom:0;">📜 Selected Master System Prompt:</label>
+              <button class="btn btn-purple btn-sm" style="padding:2px 6px; font-size:10px;" onclick="openMasterPromptLibraryModal()">📜 Prompt Library</button>
+            </div>
+            <select id="activeMasterPromptSelect" class="form-control" onchange="switchActiveMasterPrompt(this.value)">
+              <!-- Dynamic Master Prompts Rendered Here -->
+            </select>
+          </div>
+
+          <!-- Master Prompt Box -->
+          <div class="prompt-box-container">
+            <div class="prompt-header-bar">
+              <span>1. MASTER SYSTEM PROMPT <span class="badge badge-green" style="font-size:8.5px; text-transform:none;">Copy ONCE at start!</span></span>
+              <button class="btn btn-secondary btn-sm" onclick="copyMasterPrompt()">📋 Copy Master</button>
+            </div>
+            <div id="masterPromptView" class="prompt-content">Click "Generate Prompts" above...</div>
+          </div>
+
+          <!-- User Prompt Box -->
+          <div class="prompt-box-container">
+            <div class="prompt-header-bar">
+              <span>2. TAILORED USER PROMPT (Includes Timestamp ID & Synced Effects + DVP Reuse)</span>
+              <button class="btn btn-purple btn-sm" onclick="copyUserPrompt()">📋 Copy User Prompt</button>
+            </div>
+            <div id="userPromptView" class="prompt-content">Click "Generate Prompts" above...</div>
+          </div>
+
+          <div class="sync-box">
+            <strong>🔗 Timestamp, Effect & DVP Control Sync Active:</strong>
+            <div id="syncEffectCountText">0 existing effects & 0 DVP controls ready for cross-linking in prompt.</div>
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- COLUMN 3: STEP 3 & STEP 4 (INGEST JSON & PACKAGE INVENTORY) -->
+      <div>
+
+        <!-- STEP 3: Ingest AI JSON Response -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <span class="step-badge" style="background: var(--accent-green);">Step 3</span>
+              <span>Paste & Ingest AI JSON</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Paste raw JSON returned by ChatGPT / Copilot:</label>
+            <textarea id="aiJsonResponse" class="form-control code-textarea" style="min-height: 160px;" placeholder="Paste AI JSON output starting with { & ending with } here..."></textarea>
+          </div>
+
+          <div class="btn-group">
+            <button class="btn btn-green" style="flex:1;" onclick="ingestAiJsonResponse()">
+              📥 Add Component & Synchronize Effects & Controls
+            </button>
+            <button class="btn btn-secondary" onclick="clearJsonResponseInput()">
+              🧹 Clear
+            </button>
+          </div>
+        </div>
+
+        <!-- STEP 4: Package Inventory & Synchronized Effects -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <span class="step-badge" style="background: var(--accent-warning);">Step 4</span>
+              <span>Accumulated Package (<span id="pkgCompCount">0</span> Items)</span>
+            </div>
+            <button class="btn btn-green btn-sm" onclick="exportFinalFmeaPackageJSON()">
+              💾 Export Package
+            </button>
+          </div>
+
+          <!-- Component Inventory Table -->
+          <div style="font-size: 11.5px; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px;">
+            📦 Ingested Components:
+          </div>
+          <div class="table-responsive" style="margin-bottom: 14px;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Component</th>
+                  <th>Type</th>
+                  <th>Failures</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="packageInventoryTableBody">
+                <tr>
+                  <td colspan="4" style="text-align:center; padding: 16px; color: var(--text-muted);">
+                    📭 Package is currently empty.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Synchronized Master Effects Table -->
+          <div style="font-size: 11.5px; font-weight: 700; color: #c084fc; margin-bottom: 6px;">
+            🔗 Synced Effects Library (<span id="pkgEffectCount">0</span>):
+          </div>
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Timestamp ID</th>
+                  <th>Cat</th>
+                  <th>Sev</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody id="effectsLibraryTableBody">
+                <tr>
+                  <td colspan="4" style="text-align:center; padding: 12px; color: var(--text-muted);">
+                    No synchronized effects yet.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- MASTER PROMPT LIBRARY MANAGER MODAL -->
+  <div id="masterPromptLibraryModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span>📜 Master System Prompt Library Manager</span>
+        </div>
+        <button class="modal-close" onclick="closeMasterPromptLibraryModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        
+        <div style="display:grid; grid-template-columns: 340px 1fr; gap: 20px;">
+          
+          <!-- LEFT: Form to Add/Edit Master Prompt -->
+          <div style="background: #0b1120; border: 1px solid var(--border-color); border-radius: 12px; padding: 16px;">
+            <h4 style="color:#38bdf8; font-size:13px; font-weight:700; margin-bottom:10px;" id="mpFormTitle">➕ Add Custom Master Prompt</h4>
+            
+            <input type="hidden" id="mpEditId" value="">
+
+            <div class="form-group">
+              <label class="form-label">Master Prompt Title / Label</label>
+              <input type="text" id="mpName" class="form-control" placeholder="e.g. PFMEA Process Engineering Focus">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">System Prompt Content & Rules</label>
+              <textarea id="mpContent" class="form-control code-textarea" style="min-height: 240px;" placeholder="Paste system prompt instructions here..."></textarea>
+            </div>
+
+            <div class="form-group" style="display:flex; align-items:center; gap:8px; background:#0f172a; padding:8px 10px; border-radius:8px; border:1px solid var(--border-color); margin-bottom:14px;">
+              <input type="checkbox" id="mpIsActive" style="width:16px; height:16px; cursor:pointer;" checked>
+              <label for="mpIsActive" class="form-label" style="margin-bottom:0; cursor:pointer; color:#fff; font-size:11.5px; font-weight:600;">
+                🟢 Active Prompt (Enabled for Selection)
+              </label>
+            </div>
+
+            <div class="btn-group">
+              <button class="btn btn-purple" style="flex:1;" onclick="saveMasterPromptItem()" id="btnSaveMp">
+                ➕ Save Master Prompt
+              </button>
+              <button class="btn btn-secondary" onclick="clearMasterPromptForm()">
+                Clear
+              </button>
+            </div>
+          </div>
+
+          <!-- RIGHT: Saved Master Prompts List -->
+          <div>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+              <h4 style="color:#f8fafc; font-size:13px; font-weight:700;">📜 Saved Master Prompts (<span id="mpCount">0</span>)</h4>
+            </div>
+
+            <div id="masterPromptListContainer" style="max-height: 480px; overflow-y: auto;">
+              <!-- Dynamic List rendered here -->
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+
+  <!-- PREDEFINED CONTROLS (DVP & CONTROL PLAN) MANAGER MODAL -->
+  <div id="predefinedControlsModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span>🛡️ Predefined Controls Manager (DVP & Control Plan)</span>
+        </div>
+        <button class="modal-close" onclick="closePredefinedControlsModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        
+        <div style="background: rgba(124,58,237,0.1); border: 1px solid rgba(124,58,237,0.3); border-radius:8px; padding:12px; margin-bottom:16px; font-size:12px; color:#c084fc;">
+          <strong>💡 System-Managed IDs vs. User Reference Codes:</strong> The system automatically generates a permanent internal <code>System ID</code> to manage links safely. You can set and edit your custom <code>User DVP Ref ID</code> (e.g. <code>DVT-QUAL-01</code>) for your own engineering reference!
+        </div>
+
+        <div class="form-group" style="display:flex; align-items:center; gap:10px; background:#0f172a; padding:10px 14px; border-radius:8px; border:1px solid var(--border-color); margin-bottom:16px;">
+          <input type="checkbox" id="modalChkPredefinedMode" style="width:18px; height:18px; cursor:pointer;" onchange="togglePredefinedModeFromCheckbox(this.checked)">
+          <label for="modalChkPredefinedMode" class="form-label" style="margin-bottom:0; cursor:pointer; font-weight:700; color:#fff; font-size:12.5px;">
+            🛡️ Enable Strict Predefined Controls Mode
+          </label>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 340px 1fr; gap: 20px;">
+          
+          <!-- Add / Edit Control Form -->
+          <div style="background: #0b1120; border: 1px solid var(--border-color); border-radius: 12px; padding: 16px;">
+            <h4 style="color:#38bdf8; font-size:13px; font-weight:700; margin-bottom:10px;" id="prectrlFormTitle">➕ Add Master DVP / Control Plan Item</h4>
+            
+            <input type="hidden" id="prectrlEditSysId" value="">
+
+            <div class="form-group">
+              <label class="form-label">User Reference DVP ID (Custom Code)</label>
+              <input type="text" id="prectrlUserRefId" class="form-control" placeholder="e.g. DVT-QUAL-01 or PC-QUAL-05">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Control Category / Type</label>
+              <select id="prectrlType" class="form-control">
+                <option value="Prevention">Prevention Control (Design Rule / FEA / Standard)</option>
+                <option value="Detection">Detection Control (DV Test / 100% End of Line Inspection)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Control Description (Exact DVP / Control Plan wording)</label>
+              <textarea id="prectrlDesc" class="form-control" placeholder="e.g. Thermal shock DVT test -40°C to +105°C per ISO 16750-4 standard"></textarea>
+            </div>
+
+            <div class="btn-group">
+              <button class="btn btn-purple" style="flex:1;" onclick="savePredefinedControlItem()" id="btnSavePrectrl">
+                ➕ Save Control
+              </button>
+              <button class="btn btn-secondary" onclick="clearPredefinedControlForm()">
+                Clear
+              </button>
+            </div>
+          </div>
+
+          <!-- Predefined Controls List -->
+          <div>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+              <h4 style="color:#f8fafc; font-size:13px; font-weight:700;">📋 DVP & Control Plan Library (<span id="prectrlCount">0</span> Items)</h4>
+              <button class="btn btn-secondary btn-sm" onclick="clearAllPredefinedControls()">🗑️ Clear List</button>
+            </div>
+
+            <div id="predefinedControlsListContainer" style="max-height: 440px; overflow-y: auto;">
+              <!-- Dynamic List rendered here -->
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+
+  <!-- SYSTEM STRUCTURE PLANNER MODAL -->
+  <div id="structureTreeModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span>📁 Structure Tree Explorer Manager</span>
+        </div>
+        <button class="modal-close" onclick="closeStructureTreeModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        
+        <div style="display:grid; grid-template-columns: 340px 1fr; gap: 20px;">
+          
+          <!-- LEFT: Form to Add/Edit Tree Node -->
+          <div style="background: #0b1120; border: 1px solid var(--border-color); border-radius: 12px; padding: 16px;">
+            <h4 style="color:#38bdf8; font-size:13px; font-weight:700; margin-bottom:10px;" id="treeFormTitle">➕ Add Item to Folder Tree</h4>
+            
+            <input type="hidden" id="treeNodeEditId" value="">
+
+            <div class="form-group">
+              <label class="form-label">Item / Component Name</label>
+              <input type="text" id="treeNodeName" class="form-control" placeholder="e.g. Liquid Cooling Cold Plate">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Part Number / Reference Code</label>
+              <input type="text" id="treeNodePartNo" class="form-control" placeholder="e.g. CLP-AL-900">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Parent Folder (Only Marked Assemblies Allowed)</label>
+              <select id="treeNodeParentSelect" class="form-control">
+                <option value="">-- None (Top Level Root Assembly Folder) --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Description & Operational Scope</label>
+              <textarea id="treeNodeDesc" class="form-control" placeholder="Detailed description of operational scope..."></textarea>
+            </div>
+
+            <div class="form-group" style="display:flex; align-items:center; gap:8px;">
+              <input type="checkbox" id="treeNodeIsAssembly" style="width:16px; height:16px; cursor:pointer;" checked>
+              <label for="treeNodeIsAssembly" class="form-label" style="margin-bottom:0; cursor:pointer; color:#fff;">
+                📁 Is Assembly Folder (vs. 📄 Component File)
+              </label>
+            </div>
+
+            <div class="btn-group">
+              <button class="btn btn-purple" style="flex:1;" onclick="saveTreeNodeItem()" id="btnSaveTreeNode">
+                ➕ Save Node
+              </button>
+              <button class="btn btn-secondary" onclick="clearTreeNodeForm()">
+                Clear
+              </button>
+            </div>
+          </div>
+
+          <!-- RIGHT: Folder Tree Explorer View inside Popup Modal -->
+          <div>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+              <h4 style="color:#f8fafc; font-size:13px; font-weight:700; margin:0;">📁 Folder Tree Hierarchy (<span id="treeTotalCount">0</span> Items)</h4>
+              <div style="display:flex; gap:6px;">
+                <button class="btn btn-purple btn-sm" onclick="openPasteStructureTreeJsonModal()" title="Paste raw JSON text to build structure tree">📋 Paste JSON</button>
+                <button class="btn btn-blue btn-sm" onclick="triggerImportStructureTree()" title="Import structure tree from JSON file">📥 Import Tree</button>
+                <button class="btn btn-green btn-sm" onclick="exportStructureTreeJSON()" title="Export current structure tree as JSON file">📤 Export Tree</button>
+                <button class="btn btn-secondary btn-sm" onclick="openStructureTreeSampleJsonModal()" title="View JSON format & download sample template">📄 Format</button>
+                <button class="btn btn-secondary btn-sm" onclick="clearAllTreeNodesConfirm()">🗑️ Clear</button>
+              </div>
+            </div>
+
+            <!-- Popup Modal Folder Tree Container -->
+            <div id="modalTreeVisualizerContainer" class="folder-tree-container" style="max-height: 480px;">
+              <!-- Dynamic Tree View Nodes in Modal -->
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+
+  <!-- PASTE JSON TO CREATE STRUCTURE TREE MODAL -->
+  <div id="pasteStructureTreeJsonModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 740px;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span>📋 Paste JSON Text to Build Structure Tree</span>
+        </div>
+        <button class="modal-close" onclick="closePasteStructureTreeJsonModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:12.5px; color:var(--text-secondary); margin-bottom:10px;">
+          Paste your structure tree JSON text below. You can paste a raw JSON array of nodes or an object containing a <code>systemStructureTree</code> or <code>structureTree</code> key.
+        </div>
+
+        <div class="form-group" style="margin-bottom:14px;">
+          <textarea id="pasteTreeJsonTextArea" class="form-control code-textarea" style="min-height: 280px; font-size:11.5px; font-family:monospace; line-height:1.4;" placeholder="Paste JSON text here..."></textarea>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <button class="btn btn-secondary btn-sm" onclick="loadSampleIntoPasteTextArea()">
+            📋 Load Sample Template
+          </button>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-secondary" onclick="closePasteStructureTreeJsonModal()">Cancel</button>
+            <button class="btn btn-purple" onclick="parseAndApplyPastedTreeJson()">
+              ⚡ Parse & Build Structure Tree
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- SAMPLE STRUCTURE TREE JSON FORMAT MODAL -->
+  <div id="structureTreeJsonExampleModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 760px;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span>📋 Structure Tree JSON Format & Sample Template</span>
+        </div>
+        <button class="modal-close" onclick="closeStructureTreeSampleJsonModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:12.5px; color:var(--text-secondary); margin-bottom:12px;">
+          You can import any system structure tree directly into the workstation using a JSON file. Ensure your JSON file follows the format below with items containing <code>name</code>, <code>partNumber</code>, <code>parentId</code>, <code>description</code>, and <code>isAssembly</code> properties.
+        </div>
+
+        <div style="position:relative; margin-bottom:14px;">
+          <div style="display:flex; justify-content:flex-end; gap:8px; margin-bottom:6px;">
+            <button class="btn btn-purple btn-sm" onclick="copySampleTreeJsonToClipboard()">📋 Copy JSON</button>
+            <button class="btn btn-green btn-sm" onclick="downloadSampleTreeJsonFile()">💾 Download Sample JSON</button>
+          </div>
+          <pre id="sampleStructureTreeJsonPre" style="background:#0b1120; color:#38bdf8; border:1px solid var(--border-color); border-radius:8px; padding:14px; font-size:11.5px; max-height:360px; overflow-y:auto; font-family:monospace; line-height:1.4;">[
+  {
+    "id": "tree-root-01",
+    "name": "Fifth Wheel Coupling System",
+    "partNumber": "FW-SYS-900",
+    "parentId": null,
+    "description": "Complete fifth wheel heavy commercial vehicle coupling system with primary locking jaw, wedge, safety latch, and sensing package.",
+    "isAssembly": true,
+    "status": "Not Started"
+  },
+  {
+    "id": "tree-sub-01",
+    "name": "Locking Mechanism Sub-Assembly",
+    "partNumber": "FW-LOCK-300",
+    "parentId": "tree-root-01",
+    "description": "Sub-assembly housing jaw lock, secondary safety latch, operating lever, and compression spring mechanism.",
+    "isAssembly": true,
+    "status": "Not Started"
+  },
+  {
+    "id": "tree-comp-01",
+    "name": "Locking Jaw Bolt Component",
+    "partNumber": "FW-BOLT-102",
+    "parentId": "tree-sub-01",
+    "description": "High-tensile alloy steel bolt securing locking jaw to main casting plate under 150 kN load rating.",
+    "isAssembly": false,
+    "status": "Not Started"
+  },
+  {
+    "id": "tree-comp-02",
+    "name": "Electronic Proximity Sensor",
+    "partNumber": "FW-SENS-405",
+    "parentId": "tree-root-01",
+    "description": "Inductive proximity sensor detecting kingpin engagement status for cabin dashboard indication.",
+    "isAssembly": false,
+    "status": "Not Started"
+  }
+]</pre>
+        </div>
+        
+        <div style="font-size:11.5px; color:var(--text-muted); background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.3); border-radius:6px; padding:10px;">
+          📌 <strong>Key Field Descriptions:</strong><br>
+          • <code>name</code>: Component or assembly title (Required)<br>
+          • <code>partNumber</code>: Part reference number or drawing code<br>
+          • <code>parentId</code>: Set to parent node's <code>id</code> for sub-assemblies/components, or <code>null</code> for top-level root folders<br>
+          • <code>description</code>: Detailed functional scope and engineering notes passed directly into AI prompt generation<br>
+          • <code>isAssembly</code>: <code>true</code> for parent folder assemblies, <code>false</code> for leaf component files
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- INTERACTIVE USER GUIDE MODAL -->
+  <div id="userGuideModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span>📖 JOST AI FMEA Generator — User Guide</span>
+        </div>
+        <button class="modal-close" onclick="closeUserGuideModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>The <strong>Folder Tree Explorer</strong> visualizes your system as expandable sub-folders (<code>📁 Assemblies</code>) and files (<code>📄 Components</code>). Generation strictly follows top-to-bottom sequence!</p>
+        <p style="margin-top:10px;">Use <strong>📜 Master Prompt Library</strong> to select or add custom system prompts, and <strong>💾 Save Session</strong> to backup your entire workstation state.</p>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Toast Notification -->
+  <div id="toast">
+    <span id="toastIcon">✨</span>
+    <span id="toastMsg">Action completed successfully!</span>
+  </div>
+
+  <script>
+    // ----------------------------------------------------
+    // DIV-BASED CUSTOM ALERT, CONFIRM & PROMPT SYSTEM
+    // ----------------------------------------------------
+    let customAlertQueue = [];
+    let activeCustomAlertResolver = null;
+    let activeCustomAlertData = null;
+    let lastFocusedElementBeforeAlert = null;
+
+    function ensureCustomAlertDOM() {
+      if (document.getElementById('customAlertOverlay')) return;
+
+      const div = document.createElement('div');
+      div.id = 'customAlertOverlay';
+      div.className = 'custom-alert-overlay';
+      div.style.cssText = 'display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(15,23,42,0.8); backdrop-filter:blur(5px); z-index:2147483647; align-items:center; justify-content:center;';
+      div.onclick = handleCustomAlertOverlayClick;
+
+      div.innerHTML = `
+        <div id="customAlertBox" class="custom-alert-box" style="background:var(--bg-modal-content, #0f172a); color:var(--text-primary, #f8fafc); border:1px solid var(--border-modal, #38bdf8); border-radius:12px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.8); width:92%; max-width:480px; padding:22px; display:flex; flex-direction:column; gap:14px; z-index:2147483647;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <span id="customAlertIcon" style="font-size:30px; flex-shrink:0;">ℹ️</span>
+            <div style="flex:1; min-width:0;">
+              <h3 id="customAlertTitle" style="font-size:15px; font-weight:700; color:var(--text-primary, #f8fafc); margin:0; line-height:1.3;">System Notification</h3>
+              <span id="customAlertCategory" style="font-size:10.5px; color:var(--accent-color, #38bdf8); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">JOST FMEA Workstation</span>
+            </div>
+          </div>
+          <div id="customAlertMessage" style="font-size:13px; line-height:1.5; color:var(--text-secondary, #cbd5e1); white-space:pre-wrap; max-height:280px; overflow-y:auto; padding-right:4px;"></div>
+          <div id="customAlertInputContainer" style="display:none; margin-top:2px;">
+            <input type="text" id="customAlertInput" style="width:100%; padding:8px 12px; background:#080d1a; color:#f8fafc; border:1px solid #334155; border-radius:6px; font-size:13px; box-sizing:border-box; outline:none;" />
+          </div>
+          <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:6px;">
+            <button id="customAlertCancelBtn" type="button" class="btn btn-secondary" onclick="closeCustomAlert(false)" style="display:none; padding:6px 16px; font-weight:600; border-radius:6px; cursor:pointer;">Cancel</button>
+            <button id="customAlertOkBtn" type="button" class="btn btn-primary" onclick="closeCustomAlert(true)" style="padding:6px 20px; font-weight:700; border-radius:6px; cursor:pointer;">OK</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(div);
+
+      const inp = div.querySelector('#customAlertInput');
+      if (inp) {
+        inp.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            e.stopPropagation();
+            closeCustomAlert(true);
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            closeCustomAlert(false);
+          }
+        });
+      }
+    }
+
+    function showCustomAlert(message, title, type) {
+      return new Promise((resolve) => {
+        const alertData = { message, title, type, isConfirm: false, isPrompt: false, resolve };
+        if (activeCustomAlertResolver) {
+          customAlertQueue.push(alertData);
+        } else {
+          renderCustomAlert(alertData);
+        }
+      });
+    }
+
+    function showCustomConfirm(message, title, type) {
+      return new Promise((resolve) => {
+        const alertData = { message, title, type, isConfirm: true, isPrompt: false, resolve };
+        if (activeCustomAlertResolver) {
+          customAlertQueue.push(alertData);
+        } else {
+          renderCustomAlert(alertData);
+        }
+      });
+    }
+
+    function showCustomPrompt(message, defaultValue = '', title = 'Input Required', type = 'info') {
+      return new Promise((resolve) => {
+        const alertData = { message, defaultValue, title, type, isConfirm: false, isPrompt: true, resolve };
+        if (activeCustomAlertResolver) {
+          customAlertQueue.push(alertData);
+        } else {
+          renderCustomAlert(alertData);
+        }
+      });
+    }
+
+    function renderCustomAlert(alertData) {
+      ensureCustomAlertDOM();
+      const { message, defaultValue, title, type, isConfirm, isPrompt, resolve } = alertData;
+      activeCustomAlertResolver = resolve;
+      activeCustomAlertData = alertData;
+
+      lastFocusedElementBeforeAlert = document.activeElement;
+
+      const overlay = document.getElementById('customAlertOverlay');
+      const box = document.getElementById('customAlertBox');
+      const titleEl = document.getElementById('customAlertTitle');
+      const categoryEl = document.getElementById('customAlertCategory');
+      const msgEl = document.getElementById('customAlertMessage');
+      const iconEl = document.getElementById('customAlertIcon');
+      const okBtn = document.getElementById('customAlertOkBtn');
+      const cancelBtn = document.getElementById('customAlertCancelBtn');
+      const inputContainer = document.getElementById('customAlertInputContainer');
+      const inputEl = document.getElementById('customAlertInput');
+
+      if (!overlay || !box) {
+        console.log('[ALERT/PROMPT]', message);
+        if (resolve) resolve(isPrompt ? defaultValue : (isConfirm ? true : true));
+        return;
+      }
+
+      let strMsg = message;
+      if (typeof message === 'object' && message !== null) {
+        try { strMsg = JSON.stringify(message, null, 2); } catch (e) { strMsg = String(message); }
+      } else {
+        strMsg = String(message || '');
+      }
+
+      let alertType = type || 'info';
+      let alertTitle = title || (isPrompt ? 'Input Required' : (isConfirm ? 'Confirm Action' : 'System Notification'));
+      let alertIcon = 'ℹ️';
+
+      const lowerMsg = strMsg.toLowerCase();
+      if (!type) {
+        if (lowerMsg.includes('error') || lowerMsg.includes('failed') || lowerMsg.includes('invalid') || lowerMsg.includes('incorrect') || lowerMsg.includes('corrupted') || lowerMsg.includes('cannot')) {
+          alertType = 'error';
+          alertTitle = title || 'System Error';
+          alertIcon = '⛔';
+        } else if (lowerMsg.includes('warning') || lowerMsg.includes('caution') || lowerMsg.includes('unsaved') || lowerMsg.includes('delete') || lowerMsg.includes('clear')) {
+          alertType = 'warning';
+          alertTitle = title || (isConfirm ? 'Confirm Deletion / Action' : 'Validation Warning');
+          alertIcon = '⚠️';
+        } else if (lowerMsg.includes('success') || lowerMsg.includes('complete') || lowerMsg.includes('saved') || lowerMsg.includes('imported') || lowerMsg.includes('added')) {
+          alertType = 'success';
+          alertTitle = title || 'Action Successful';
+          alertIcon = '✅';
+        }
+      } else {
+        if (alertType === 'error') alertIcon = '⛔';
+        else if (alertType === 'warning') alertIcon = '⚠️';
+        else if (alertType === 'success') alertIcon = '✅';
+        else alertIcon = 'ℹ️';
+      }
+
+      box.className = `custom-alert-box custom-alert--${alertType}`;
+      if (titleEl) titleEl.textContent = alertTitle;
+      if (categoryEl) categoryEl.textContent = 'JOST FMEA Workstation';
+      if (msgEl) msgEl.textContent = strMsg;
+      if (iconEl) iconEl.textContent = alertIcon;
+
+      if (isPrompt) {
+        if (inputContainer) inputContainer.style.display = 'block';
+        if (inputEl) {
+          inputEl.value = defaultValue || '';
+        }
+        if (cancelBtn) cancelBtn.style.display = 'inline-block';
+        if (okBtn) okBtn.textContent = 'Submit';
+      } else if (isConfirm) {
+        if (inputContainer) inputContainer.style.display = 'none';
+        if (cancelBtn) cancelBtn.style.display = 'inline-block';
+        if (okBtn) okBtn.textContent = 'Confirm';
+      } else {
+        if (inputContainer) inputContainer.style.display = 'none';
+        if (cancelBtn) cancelBtn.style.display = 'none';
+        if (okBtn) okBtn.textContent = 'OK';
+      }
+
+      overlay.style.display = 'flex';
+
+      setTimeout(() => {
+        if (isPrompt && inputEl) {
+          inputEl.focus();
+          inputEl.select();
+        } else if (okBtn) {
+          okBtn.focus();
+        }
+      }, 50);
+    }
+
+    function closeCustomAlert(confirmed) {
+      const overlay = document.getElementById('customAlertOverlay');
+      if (overlay) overlay.style.display = 'none';
+
+      const inputEl = document.getElementById('customAlertInput');
+      const curData = activeCustomAlertData;
+      const res = activeCustomAlertResolver;
+
+      activeCustomAlertResolver = null;
+      activeCustomAlertData = null;
+
+      if (res) {
+        if (curData && curData.isPrompt) {
+          if (confirmed && inputEl) {
+            res(inputEl.value);
+          } else {
+            res(null);
+          }
+        } else if (curData && curData.isConfirm) {
+          res(Boolean(confirmed));
+        } else {
+          res(true);
+        }
+      }
+
+      // Restore focus to prevent input freeze
+      try {
+        if (lastFocusedElementBeforeAlert && typeof lastFocusedElementBeforeAlert.focus === 'function') {
+          lastFocusedElementBeforeAlert.focus();
+        }
+      } catch (e) {}
+
+      if (customAlertQueue.length > 0) {
+        const nextAlert = customAlertQueue.shift();
+        setTimeout(() => renderCustomAlert(nextAlert), 80);
+      }
+    }
+
+    function handleCustomAlertOverlayClick(e) {
+      if (e.target && e.target.id === 'customAlertOverlay') {
+        closeCustomAlert(false);
+      }
+    }
+
+    document.addEventListener('keydown', (e) => {
+      const overlay = document.getElementById('customAlertOverlay');
+      if (overlay && overlay.style.display !== 'none') {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          closeCustomAlert(false);
+        } else if (e.key === 'Enter') {
+          const inputEl = document.getElementById('customAlertInput');
+          if (document.activeElement !== inputEl) {
+            e.preventDefault();
+            e.stopPropagation();
+            closeCustomAlert(true);
+          }
+        }
+      }
+    });
+
+    // Override window.alert, window.confirm, and window.prompt globally
+    window.alert = function (message, title, type) {
+      return showCustomAlert(message, title, type);
+    };
+    window.confirm = function (message, title, type) {
+      return showCustomConfirm(message, title, type);
+    };
+    window.prompt = function (message, defaultValue, title, type) {
+      return showCustomPrompt(message, defaultValue, title, type);
+    };
+    // Global Accumulated FMEA Subpackage State
+    let fmeaPackageState = {
+      packageMagic: "JOST_FMEA_SUBFILE_PKG_V1",
+      projectName: "JOST_Multi_Component_FMEA_Package",
+      exportedAt: new Date().toISOString(),
+      structure: [],
+      variants: [],
+      functions: [],
+      requirements: [],
+      functionLines: [],
+      libraries: {
+        effects: [],
+        causes: [],
+        controls: []
+      },
+      failureModeEffects: {},
+      failureModeCauses: {},
+      causeControls: {}
+    };
+
+    // System Structure Tree Memory (Folder Structure with Expand/Collapse & Top-to-Bottom Order)
+    let systemStructureTree = [
+      {
+        id: "tree-node-1",
+        name: "Electric Traction Motor Inverter",
+        partNumber: "INV-400V-800",
+        description: "Converts 400V DC battery power to 3-phase AC power to drive traction motor. Mounted underhood, subject to thermal cycling (-40°C to +105°C).",
+        isAssembly: true,
+        parentId: null,
+        status: "Not Started",
+        isExpanded: true
+      },
+      {
+        id: "tree-node-2",
+        name: "IGBT Power Semiconductor Sub-Assembly",
+        partNumber: "INV-IGBT-02",
+        description: "High-power switching transistor module handling 400A peak current with bonded thermal gel interface.",
+        isAssembly: true,
+        parentId: "tree-node-1",
+        status: "Not Started",
+        isExpanded: true
+      },
+      {
+        id: "tree-node-3",
+        name: "Liquid Cooling Cold Plate",
+        partNumber: "CLP-AL-900",
+        description: "Aluminum die-cast liquid cooling channel plate mounted directly beneath IGBT power module.",
+        isAssembly: false,
+        parentId: "tree-node-1",
+        status: "Not Started",
+        isExpanded: true
+      }
+    ];
+
+    // Standard Built-in Master System Prompt 1
+    const DEFAULT_MASTER_SYSTEM_PROMPT = `You are a Senior Automotive Systems & Reliability Engineering Specialist expert in AIAG-VDA 7-Step FMEA standards, manufacturing process engineering, boundary analysis, and digital integration.
+
+Your task is to take the user's Component/Assembly Name, Part Number, Description, and Session Timestamp ID Prefix, and autonomously generate a complete, production-ready FMEA subpackage down to Prevention and Detection Controls.
+
+AUTOMATED ENGINEERING INTELLIGENCE RULES:
+
+1. TIMESTAMP-BASED UNIQUE ID GENERATION RULES (STRICT COLLISION PREVENTION):
+   - You MUST use the "SESSION TIMESTAMP ID PREFIX" provided in the User Prompt (e.g. "t17253501") to construct all NEW unique entity IDs.
+   - Format for NEW items:
+     * Structure Node ID: "struct-" + TimestampPrefix (e.g. "struct-t17253501")
+     * Function ID: "fn-" + TimestampPrefix + "-01", "fn-" + TimestampPrefix + "-02", etc.
+     * Requirement ID: "req-" + TimestampPrefix + "-01", "req-" + TimestampPrefix + "-02", etc.
+     * Failure Mode ID: "fm-" + TimestampPrefix + "-01", "fm-" + TimestampPrefix + "-02", etc.
+     * End User Level Effect ID: "eff-eu-" + TimestampPrefix + "-01", etc.
+     * OEM Assembly Plant Level Effect ID: "eff-oem-" + TimestampPrefix + "-01", etc.
+     * Component Plant Level Effect ID: "eff-plant-" + TimestampPrefix + "-01", etc.
+     * Cause ID: "cause-" + TimestampPrefix + "-01", etc.
+     * Control ID: "ctrl-" + TimestampPrefix + "-01", etc.
+
+2. REUSING EXISTING MASTER EFFECT & DVP CONTROL IDs (MANDATORY REUSE RULE):
+   - Review the "INHERITED MASTER EFFECTS LIBRARY" and "INHERITED MASTER CONTROLS LIBRARY" provided in the User Prompt.
+   - If an existing Effect or DVP Control matches a failure mode or cause of the current component, REUSE ITS EXACT UNIQUE ID directly in your "failureModeEffects" or "causeControls" mapping arrays.
+   - Do NOT create duplicate effect or control objects in "libraries" when reusing existing IDs!
+
+3. DISTINCTION: ASSEMBLIES/SUB-ASSEMBLIES vs. INDIVIDUAL COMPONENTS:
+   Automatically detect if the item is an Assembly/Sub-System or an Individual Component and apply target cause rules:
+
+   A) FOR ASSEMBLIES OR SUB-SYSTEMS:
+      Focus on ASSEMBLY JOINT & PROCESS CHARACTERISTICS + INTERFACE REQUIREMENTS:
+      - Physical/Logical Interfaces: Mating flange alignment, connector pinout boundaries, thermal transfer interfaces, fluid routing boundaries, inter-component clearance envelopes.
+      - Joint & Process Characteristics (using "____" for tolerances):
+        * Welding: Penetration depth (> ____ mm), throat thickness a-dim, heat input, shielding gas flow, porosity allowance.
+        * Brazing: Braze alloy composition, capillary gap width (____ mm ± ____ mm), overlap length, braze void ratio (< ____ %).
+        * Torque / Fastening: Tightening torque (____ Nm ± ____ Nm), turn angle, bolt preload (____ kN ± ____ kN), thread engagement, k-factor, threadlocker grade.
+        * Press-Fit / Interference: Interference overlap (____ µm ± ____ µm), insertion force (____ N ± ____ N), chamfer angle, surface roughness Ra.
+        * Adhesive Bonding: Bondline thickness (____ mm ± ____ mm), cure temp/time, lap shear strength (> ____ MPa).
+        * Crimping / Soldering: Crimp height/width (____ mm ± ____ mm), terminal pull-out force (> ____ N), wetting angle.
+
+   B) FOR INDIVIDUAL COMPONENTS:
+      Focus on INTERFACE REQUIREMENTS + COMPONENT DESIGN CHARACTERISTICS:
+      - Physical Interfaces: Mounting hole patterns, mating sealing surfaces, keyway/spline interfaces, electrical terminal tabs.
+      - Component Design Characteristics (using "____" for tolerances):
+        * Material Specification & Alloy Grade (e.g., Aluminum 6061-T6, SUS304, PA66-GF30, SCr420H steel).
+        * Wall / Section / Plating / Coating Thickness (e.g., Wall thickness > ____ mm, plating thickness ____ µm ± ____ µm).
+        * Critical Dimensions & Geometric Tolerances (GD&T) (e.g., Flatness < ____ mm, concentricity < ____ mm, runout < ____ mm).
+        * Surface Finish & Roughness (e.g., Sealing surface roughness Ra < ____ µm, anodizing layer thickness ____ µm).
+        * Hardness & Mechanical Strength (e.g., Tensile yield strength > ____ MPa, surface hardness ____ HRC ± ____ HRC).
+
+4. THE 7 AIAG-VDA FAILURE MODE TYPES:
+   When generating Failure Modes, analyze and cover the 7 standard AIAG-VDA failure mode categories:
+   - Type 1: Loss of Function / Complete Failure (e.g., total power loss, open circuit, complete fracture).
+   - Type 2: Partial Function (e.g., reduced flow rate, insufficient clamping force).
+   - Type 3: Intermittent Function (e.g., loose pin connection under vibration, signal dropout).
+   - Type 4: Degradation of Function (e.g., gradual thermal wear, seal hardening, pressure drop drift).
+   - Type 5: Unintended / Uncommanded Function (e.g., false actuation, fastener self-loosening).
+   - Type 6: Exceeds Function / Over-Performance (e.g., over-pressure, excessive torque output).
+   - Type 7: Delayed Function (e.g., slow valve opening, thermal response lag).
+
+5. CONTEXTUAL FUNCTION DOMAIN SELECTION (9 DOMAINS):
+   Automatically select ONLY the function categories that make engineering sense for the item:
+   - "Primary function": Main operational purpose. NOTE: Include Branding requirements (decals, logos, emblems, visible surface finish, and product branding) under Primary function.
+   - "Durability and reliability": Lifespan, fatigue resistance, thermal cycling endurance, wear limits.
+   - "Appearance": Surface finish, color matching, gap/flushness aesthetics.
+   - "Assembly fitment/packaging": Clearance, mounting alignment, envelope dimensions, fastener engagement, insertion force.
+   - "Leakage requirement": Fluid, gas, air, dust, or moisture sealing limits (if fluid/enclosure boundary applies).
+   - "Safety function": Hazard mitigation, fault isolation, structural collapse prevention, high-voltage/fire protection.
+   - "Regulation function": Compliance with legal, environmental, EMC/EMI, emissions, or FMVSS/ECE safety regulations.
+   - "Servicing": Serviceability, field maintenance access, modular replacement, diagnostic scan tool accessibility.
+   - "NVH (Noise, Vibration, and Harshness)": Acoustic noise isolation, structure-borne vibration dampening, resonance avoidance, whine/rattle/hum mitigation.
+
+6. MEASURABLE REQUIREMENTS & CAUSE SPECS PLACEHOLDER RULE ("____"):
+   - DO NOT hardcode specific numerical values, tolerances, percentages, or unit limits in requirements or cause specs!
+   - You MUST use "____" as a blank placeholder for ALL numerical values, targets, temperatures, pressures, and tolerances.
+
+7. MULTIPLE EFFECTS PER CATEGORY:
+   For EACH Failure Mode, generate ALL possible effects across the 3 AIAG-VDA levels:
+   - End User Level Effects: Driver safety, vehicle breakdown, primary function loss, warning lamps, NVH.
+   - OEM Assembly Plant Level Effects: Line stoppage, fitment failure, rework at vehicle assembly plant, pre-delivery rejection.
+   - Component Plant Level Effects: Manufacturing scrap at component factory, automated EOL tester rejection, tooling damage.
+
+8. STRICT AIAG-VDA SEVERITY RATING DETERMINATION:
+   - Severity 10: Safety-related failure (potential hazard/injury to end user or plant assembly workers without warning).
+   - Severity 9: Regulation-related failure (non-compliance with vehicle legal, safety, environmental, EMC, or FMVSS/ECE regulations).
+   - Severity 8: Total loss of Primary Function, complete Fitment/Packaging failure, or complete Durability/Reliability failure.
+   - Severity 7: Degradation of Primary Function, partial Fitment/Packaging difficulty, or reduced Durability/Reliability.
+   - Severity 4–6: Moderate comfort/convenience impact or moderate plant rework.
+   - Severity 1–3: Minor cosmetic/appearance issue or minor plant inconvenience.
+
+9. CONTROLS DEFINITION & DVP REUSE ENFORCEMENT:
+   - Prevention Controls (PC): Design rules, joint FEA, CFD simulations, CAD clearance checks, GD&T standards.
+   - Detection Controls (DC): Design verification tests (DVT), 100% automated torque logging, CMM dimensional inspection, EOL leak testing.
+   - DVP REUSE RULE: Prioritize selecting Prevention and Detection controls directly from the "INHERITED MASTER CONTROLS LIBRARY". Reuse their exact control IDs in causeControls!
+
+OUTPUT FORMAT REQUIREMENTS:
+- Output MUST be valid JSON strictly adhering to the JOST_FMEA_SUBFILE_PKG_V1 subpackage schema.
+- Do NOT output any markdown introduction or conclusion text outside the raw JSON object.`;
+
+    // Built-in Master System Prompt 2: Multidisciplinary CFT Automotive DFMEA Master (Exhaustive & Granular)
+    const CFT_AUTOMOTIVE_DFMEA_MASTER_PROMPT = `You are a multidisciplinary cross-functional team (CFT) led by a **Senior Automotive Systems & Reliability Engineering Specialist** and acting concurrently as the **FMEA Facilitator**, **Lead Design Engineer**, **Test & Validation Engineer**, **Manufacturing/Process Interface Engineer**, and **Quality/Reliability Engineer**. Your overarching framework is strictly governed by **AIAG-VDA DFMEA (Design Failure Mode and Effects Analysis) 7-Step standards**, boundary analysis, and digital integration.
+
+Your task is to take the user's Component/Assembly Name, Element Type (Assembly or Component), Part Number, Description, Session Timestamp ID Prefix, Inherited Master Effects Library, and Inherited Master Controls Library, and autonomously generate an **exhaustive, highly granular, production-ready DFMEA subpackage** containing **ALL possible functions, requirements, multi-type failure modes, exhaustive 3-level effects (covering safety, regulatory, economics/scrap, user satisfaction, customer plant assembly/packaging, and traceability), and deep physics-of-failure root causes** down to Prevention and Detection Controls in valid JSON. Do NOT summarize or limit your output; provide a comprehensive, multi-dimensional FMEA matrix.
+
+USER INPUT DATA:
+- Component/Assembly Name: {{COMPONENT_NAME}}
+- Type (Assembly or Component): {{ELEMENT_TYPE}}
+- Part Number: {{PART_NUMBER}}
+- Description: {{DESCRIPTION}}
+- Session Timestamp ID Prefix: {{TIMESTAMP_PREFIX}} (e.g., "t17253501")
+- INHERITED MASTER EFFECTS LIBRARY: {{EFFECTS_LIBRARY_JSON}}
+- INHERITED MASTER CONTROLS LIBRARY: {{CONTROLS_LIBRARY_JSON}}
+
+---
+
+### CFT COLLABORATIVE ENGINEERING DIRECTIVES:
+1. **FMEA Facilitator Persona**: Enforce strict adherence to the AIAG-VDA 7-Step methodology, maintain rigorous logical flow across Steps 2 through 6, and ensure correct Action Priority (AP) and RPN calculations.
+2. **Lead Design Engineer Persona**: Focus intensely on component architecture, material properties, tolerance stack-ups, GD&T, interface boundaries, and physical degradation paths.
+3. **Test & Validation Engineer Persona**: Define rigorous DVP&R requirements, physics-of-failure limits, and empirical detection/prevention controls.
+4. **Manufacturing/Process Interface Engineer Persona**: Evaluate how design choices impact customer plant assembly, packaging, handling, joint integrity, and scrap risks.
+5. **Quality & Reliability Engineer Persona**: Assess realistic occurrence probabilities, evaluate end-user safety/regulatory impacts, and ensure severity ratings precisely reflect the 10-point AIAG-VDA scale.
+
+---
+
+### AUTOMATED ENGINEERING INTELLIGENCE & MAXIMUM DEPTH RULES:
+
+1. **TIMESTAMP-BASED UNIQUE ID GENERATION & SEQUENCING (STRICT COLLISION PREVENTION):**
+   - You MUST use the provided "SESSION TIMESTAMP ID PREFIX" (e.g. "{{TIMESTAMP_PREFIX}}") to construct all NEW unique entity IDs.
+   - Increment IDs sequentially across multiple entries (e.g., \`-01\`, \`-02\`, \`-03\`, \`-04\`, \`-05\`, etc.):
+     * Structure Node ID: \`"struct-" + TimestampPrefix\`
+     * Function IDs: \`"fn-" + TimestampPrefix + "-01"\`, \`-02\`, \`-03\`, etc.
+     * Requirement IDs: \`"req-" + TimestampPrefix + "-01"\`, \`-02\`, \`-03\`, etc.
+     * Failure Mode IDs: \`"fm-" + TimestampPrefix + "-01"\`, \`-02\`, \`-03\`, etc.
+     * End User Level Effect IDs: \`"eff-eu-" + TimestampPrefix + "-01"\`, \`-02\`, etc.
+     * OEM/Customer Assembly Plant Level Effect IDs: \`"eff-oem-" + TimestampPrefix + "-01"\`, \`-02\`, etc.
+     * Component Plant Level Effect IDs: \`"eff-plant-" + TimestampPrefix + "-01"\`, \`-02\`, etc.
+     * Cause IDs: \`"cause-" + TimestampPrefix + "-01"\`, \`-02\`, etc.
+     * Control IDs: \`"ctrl-" + TimestampPrefix + "-01"\`, \`-02\`, etc.
+
+2. **REUSING EXISTING MASTER EFFECT & DVP CONTROL IDs (MANDATORY REUSE RULE):**
+   - Review the "INHERITED MASTER EFFECTS LIBRARY" and "INHERITED MASTER CONTROLS LIBRARY" provided above.
+   - If an existing Effect or DVP Control matches a failure mode or cause of the current component, REUSE ITS EXACT UNIQUE ID directly in your mapping arrays. Do NOT create duplicate objects when reusing existing IDs!
+
+3. **EXHAUSTIVE MULTI-FUNCTION & DOMAIN COVERAGE (MANDATORY BREADTH):**
+   - You must generate **MULTIPLE distinct functions** covering *every* applicable domain from the 9 allowed categories: Primary Operation, Durability/Reliability, Appearance/Branding, Assembly Fitment/Packaging, Leakage, Safety, Regulation, Servicing, and NVH.
+   - **Mandatory Part Marking & Traceability:** Always include a dedicated function, requirement, failure mode, and root cause for permanent part marking, DataMatrix codes, labels, logos, and traceability.
+
+4. **EXHAUSTIVE AIAG-VDA 7-TYPE FAILURE MODE MAPPING:**
+   - For every function, generate multiple failure modes mapping across the **7 standard AIAG-VDA failure categories**:
+     * Type 1: Loss of Function / Complete Failure
+     * Type 2: Partial Function / Insufficient Performance
+     * Type 3: Intermittent Function / Unstable Operation
+     * Type 4: Degradation of Function / Wear over Time
+     * Type 5: Unintended / Uncommanded Function / Self-Loosening
+     * Type 6: Exceeds Function / Over-Performance / Over-Pressure
+     * Type 7: Delayed Function / Response Lag
+
+5. **STRICT AIAG-VDA 3-LEVEL EFFECT DISTINCTION (GRANULAR IMPACTS):**
+   For EACH failure mode, generate multiple effects across the three hierarchical levels with distinct descriptions covering safety, regulatory compliance, economic/scrap cost, customer satisfaction, and plant operations:
+   - **End User Level Effects (Vehicle & Operator Impact):** Focus on vehicle breakdown, safety hazards, legal/regulatory non-compliance, cabin NVH discomfort, warning lamp illumination, and severe customer dissatisfaction.
+   - **OEM / Customer Plant Level Effects (Customer Assembly Plant Impact):** Focus strictly on line-side assembly/packaging issues, interface interference preventing mating with surrounding components, line stoppage, station rework, scanner failure due to damaged DataMatrix/decals, and pre-delivery rejections.
+   - **Component Plant Level Effects (Component Supplier Plant Impact):** Focus on internal factory scrap generation, economic loss, EOL automated tester rejection, internal sorting costs, and tooling damage.
+
+6. **MEASURABLE REQUIREMENTS & CAUSE SPECS PLACEHOLDER RULE (\`____\`):**
+   - DO NOT hardcode specific numerical values, tolerances, percentages, or unit limits.
+   - You MUST use \`____\` as a blank placeholder for ALL numerical values, targets, temperatures, pressures, and tolerances.
+
+7. **PHYSICS-OF-FAILURE & NOISE FACTOR ROOT CAUSES:**
+   - Root causes must detail deep physical degradation mechanisms (e.g., thermal fatigue, high/low-cycle fatigue, stress relaxation, fretting wear, galvanic corrosion, adhesive delamination, thermal expansion mismatch under extreme ambient temperatures of \`± ____ °C\`).
+   - Tag critical root cause characteristics with **[SC Tag]** (Special Characteristic) or **[CC Tag]** (Critical Characteristic).
+
+8. **STRICT SEVERITY & ACTION PRIORITY (AP) DETERMINATION:**
+   - Assign Severity (1-10) per AIAG-VDA rules (10 for unwarned safety, 9 for regulatory, 8 for total primary function loss, 4-6 for plant rework/scrap/comfort, 1-3 for minor appearance).
+   - Assign Action Priority (High [H], Medium [M], Low [L]) using the official multi-way lookup matrix combining Severity, Occurrence, and Detection.
+
+---
+
+### OUTPUT FORMAT REQUIREMENTS:
+- Output MUST be valid JSON strictly adhering to the \`JOST_FMEA_SUBFILE_PKG_V1\` subpackage schema, populated with an **extensive, comprehensive array of multiple functions, requirements, failure lines, effects, causes, and controls**.
+- Do NOT output any markdown introduction or conclusion text outside the raw JSON object.
+
+\`\`\`json
+{
+  "packageMagic": "JOST_FMEA_SUBFILE_PKG_V1",
+  "projectName": "Component DFMEA Package",
+  "exportedAt": "ISO Date",
+  "structure": [
+    {
+      "id": "struct-{{TIMESTAMP_PREFIX}}",
+      "name": "Component or Assembly Name",
+      "type": "Sub-System | Component",
+      "partNumber": "PART-NO",
+      "description": "Description"
+    }
+  ],
+  "variants": [],
+  "functions": [
+    {
+      "id": "fn-{{TIMESTAMP_PREFIX}}-01",
+      "structId": "struct-{{TIMESTAMP_PREFIX}}",
+      "name": "Provide permanent part marking, DataMatrix code, traceability identification, decals, and product branding",
+      "type": "Primary function"
+    },
+    {
+      "id": "fn-{{TIMESTAMP_PREFIX}}-02",
+      "structId": "struct-{{TIMESTAMP_PREFIX}}",
+      "name": "Active Verb + Noun Statement (Primary Operational Function)",
+      "type": "Primary function"
+    },
+    {
+      "id": "fn-{{TIMESTAMP_PREFIX}}-03",
+      "structId": "struct-{{TIMESTAMP_PREFIX}}",
+      "name": "Active Verb + Noun Statement (Durability & Reliability Function)",
+      "type": "Durability and reliability"
+    },
+    {
+      "id": "fn-{{TIMESTAMP_PREFIX}}-04",
+      "structId": "struct-{{TIMESTAMP_PREFIX}}",
+      "name": "Active Verb + Noun Statement (Assembly Fitment & Packaging Interface)",
+      "type": "Assembly fitment/packaging"
+    }
+  ],
+  "requirements": [
+    {
+      "id": "req-{{TIMESTAMP_PREFIX}}-01",
+      "structId": "struct-{{TIMESTAMP_PREFIX}}",
+      "functionId": "fn-{{TIMESTAMP_PREFIX}}-01",
+      "desc": "Part marking, labels, logos, and DataMatrix codes must remain fully readable, scannable, and adherent throughout operational lifecycle under environmental exposure using ____",
+      "spec": "Traceability optical contrast ratio > ____ % and adhesion peel strength > ____ N"
+    },
+    {
+      "id": "req-{{TIMESTAMP_PREFIX}}-02",
+      "structId": "struct-{{TIMESTAMP_PREFIX}}",
+      "functionId": "fn-{{TIMESTAMP_PREFIX}}-02",
+      "desc": "Primary operational performance requirement statement using ____ for values",
+      "spec": "Specification target and operating window using ____"
+    },
+    {
+      "id": "req-{{TIMESTAMP_PREFIX}}-03",
+      "structId": "struct-{{TIMESTAMP_PREFIX}}",
+      "functionId": "fn-{{TIMESTAMP_PREFIX}}-03",
+      "desc": "Lifespan and environmental resistance requirement statement using ____",
+      "spec": "Endurance cycle limit > ____ cycles under thermal range of ____ °C"
+    },
+    {
+      "id": "req-{{TIMESTAMP_PREFIX}}-04",
+      "structId": "struct-{{TIMESTAMP_PREFIX}}",
+      "functionId": "fn-{{TIMESTAMP_PREFIX}}-04",
+      "desc": "Physical mating envelope, clearance, and insertion force requirement using ____",
+      "spec": "Clearance gap within ____ mm and insertion force < ____ N"
+    }
+  ],
+  "functionLines": [
+    {
+      "id": "fl-{{TIMESTAMP_PREFIX}}-01",
+      "structId": "struct-{{TIMESTAMP_PREFIX}}",
+      "functionId": "fn-{{TIMESTAMP_PREFIX}}-01",
+      "requirementId": "req-{{TIMESTAMP_PREFIX}}-01",
+      "failureModeId": "fm-{{TIMESTAMP_PREFIX}}-01",
+      "failureModeName": "Unreadable, faded, damaged, or missing part marking, decal, or DataMatrix code (Type 4 - Degradation)",
+      "severity": 6,
+      "occurrence": 3,
+      "detection": 2,
+      "rpn": 36,
+      "ap": "M"
+    },
+    {
+      "id": "fl-{{TIMESTAMP_PREFIX}}-02",
+      "structId": "struct-{{TIMESTAMP_PREFIX}}",
+      "functionId": "fn-{{TIMESTAMP_PREFIX}}-02",
+      "requirementId": "req-{{TIMESTAMP_PREFIX}}-02",
+      "failureModeId": "fm-{{TIMESTAMP_PREFIX}}-02",
+      "failureModeName": "Complete loss of primary operational function / total functional failure (Type 1 - Loss of Function)",
+      "severity": 8,
+      "occurrence": 3,
+      "detection": 2,
+      "rpn": 48,
+      "ap": "M"
+    },
+    {
+      "id": "fl-{{TIMESTAMP_PREFIX}}-03",
+      "structId": "struct-{{TIMESTAMP_PREFIX}}",
+      "functionId": "fn-{{TIMESTAMP_PREFIX}}-03",
+      "requirementId": "req-{{TIMESTAMP_PREFIX}}-03",
+      "failureModeId": "fm-{{TIMESTAMP_PREFIX}}-03",
+      "failureModeName": "Intermittent operational dropouts under severe vehicle vibration (Type 3 - Intermittent Function)",
+      "severity": 7,
+      "occurrence": 4,
+      "detection": 3,
+      "rpn": 84,
+      "ap": "M"
+    },
+    {
+      "id": "fl-{{TIMESTAMP_PREFIX}}-04",
+      "structId": "struct-{{TIMESTAMP_PREFIX}}",
+      "functionId": "fn-{{TIMESTAMP_PREFIX}}-04",
+      "requirementId": "req-{{TIMESTAMP_PREFIX}}-04",
+      "failureModeId": "fm-{{TIMESTAMP_PREFIX}}-04",
+      "failureModeName": "Dimensional distortion or interface misalignment preventing mating with surrounding components (Type 2 - Partial Function)",
+      "severity": 7,
+      "occurrence": 3,
+      "detection": 2,
+      "rpn": 42,
+      "ap": "M"
+    }
+  ],
+  "libraries": {
+    "effects": [
+      {
+        "id": "eff-eu-{{TIMESTAMP_PREFIX}}-01",
+        "category": "End User Level",
+        "desc": "[End User Level]: Inability to trace component during field service recall campaigns, leading to regulatory non-compliance risk and customer dissatisfaction",
+        "severity": 7
+      },
+      {
+        "id": "eff-eu-{{TIMESTAMP_PREFIX}}-02",
+        "category": "End User Level",
+        "desc": "[End User Level]: Complete loss of vehicle propulsion or sudden system breakdown in traffic creating safety hazard",
+        "severity": 8
+      },
+      {
+        "id": "eff-eu-{{TIMESTAMP_PREFIX}}-03",
+        "category": "End User Level",
+        "desc": "[End User Level]: Unstable vehicle operation, erratic warning lamp illumination, and severe customer dissatisfaction",
+        "severity": 7
+      },
+      {
+        "id": "eff-eu-{{TIMESTAMP_PREFIX}}-04",
+        "category": "End User Level",
+        "desc": "[End User Level]: Component mechanical interference, rattle, or vibration noise (NVH) experienced during vehicle operation",
+        "severity": 5
+      },
+      {
+        "id": "eff-oem-{{TIMESTAMP_PREFIX}}-01",
+        "category": "OEM Assembly Plant Level",
+        "desc": "[OEM Plant Level]: Optical line-side scanner failure to read DataMatrix code causing assembly line stoppage at customer plant",
+        "severity": 7
+      },
+      {
+        "id": "eff-oem-{{TIMESTAMP_PREFIX}}-02",
+        "category": "OEM Assembly Plant Level",
+        "desc": "[OEM Plant Level]: Component fails to mate or assemble with mating hardware on customer assembly line due to dimensional offset, requiring offline station rework",
+        "severity": 8
+      },
+      {
+        "id": "eff-plant-{{TIMESTAMP_PREFIX}}-01",
+        "category": "Component Plant Level",
+        "desc": "[Component Plant Level]: Rejection of finished goods at internal EOL station resulting in internal economic scrap loss and line sorting cost",
+        "severity": 6
+      }
+    ],
+    "causes": [
+      {
+        "id": "cause-{{TIMESTAMP_PREFIX}}-01",
+        "details": "Root cause detailing insufficient laser engraving depth or adhesive degradation of decal under environmental thermal cycling [SC Tag]",
+        "characteristics": "Surface Coating / Marking Characteristic",
+        "spec": "Target depth > ____ µm and peel strength > ____ N/mm",
+        "occurrence": 3,
+        "detection": 2
+      },
+      {
+        "id": "cause-{{TIMESTAMP_PREFIX}}-02",
+        "details": "Root cause detailing high-cycle fatigue or material micro-structural defect under cyclic mechanical loading [CC Tag]",
+        "characteristics": "Design / Material Characteristic",
+        "spec": "Tensile yield strength > ____ MPa",
+        "occurrence": 3,
+        "detection": 2
+      },
+      {
+        "id": "cause-{{TIMESTAMP_PREFIX}}-03",
+        "details": "Root cause detailing contact fretting wear, micro-motion, and electrical/mechanical joint degradation under high vibration spectra",
+        "characteristics": "Interface / Tribological Characteristic",
+        "spec": "Contact pressure > ____ MPa and amplitude < ____ µm",
+        "occurrence": 4,
+        "detection": 3
+      },
+      {
+        "id": "cause-{{TIMESTAMP_PREFIX}}-04",
+        "details": "Root cause detailing tolerance stack-up and thermal expansion mismatch exceeding interface clearance limits at extreme temperatures of ± ____ °C",
+        "characteristics": "Interface / Dimensional GD&T Characteristic",
+        "spec": "Flatness < ____ mm and tolerance stack < ____ mm",
+        "occurrence": 3,
+        "detection": 2
+      }
+    ],
+    "controls": [
+      {
+        "id": "ctrl-prev-{{TIMESTAMP_PREFIX}}-01",
+        "desc": "Design guidelines for laser marking contrast, adhesive specification review, and finite element analysis (FEA) under worst-case thermal/mechanical loads",
+        "type": "Prevention"
+      },
+      {
+        "id": "ctrl-det-{{TIMESTAMP_PREFIX}}-01",
+        "desc": "Optical character verification (OCV), DataMatrix scan test, DVP&R accelerated life testing, and thermal cycling endurance validation",
+        "type": "Detection"
+      }
+    ]
+  },
+  "failureModeEffects": {
+    "fm-{{TIMESTAMP_PREFIX}}-01": ["eff-eu-{{TIMESTAMP_PREFIX}}-01", "eff-oem-{{TIMESTAMP_PREFIX}}-01", "eff-plant-{{TIMESTAMP_PREFIX}}-01"],
+    "fm-{{TIMESTAMP_PREFIX}}-01": [
+      "eff-eu-{{TIMESTAMP_PREFIX}}-01",
+      "eff-oem-{{TIMESTAMP_PREFIX}}-01",
+      "eff-plant-{{TIMESTAMP_PREFIX}}-01"
+    ]
+  },
+  "failureModeCauses": {
+    "fm-{{TIMESTAMP_PREFIX}}-01": [
+      "cause-{{TIMESTAMP_PREFIX}}-01"
+    ]
+  },
+  "causeControls": {
+    "cause-{{TIMESTAMP_PREFIX}}-01": [
+      "ctrl-prev-{{TIMESTAMP_PREFIX}}-01",
+      "ctrl-det-{{TIMESTAMP_PREFIX}}-01"
+    ]
+  }
+}`;
+
+    // Built-in Master System Prompt 3: Autonomous AIAG & VDA CFT FMEA Engine (master_fmea_engine_prompt.md)
+    const CFT_AUTOMOTIVE_DFMEA_VDA_TRACEABILITY_PROMPT = `# MASTER PROMPT — AUTONOMOUS AIAG & VDA CFT FMEA ENGINE
+## JOST_FMEA_SUBFILE_PKG_V1
+
+You are an Autonomous Senior Automotive Systems, Design, Manufacturing, Quality, Reliability, Validation and FMEA Engineering Expert.
+
+You are responsible for generating a complete, technically defensible, production-ready FMEA subpackage according to the AIAG & VDA 7-Step FMEA methodology, while internally acting as a complete Cross-Functional Team (CFT).
+
+Your output will be consumed directly by a digital FMEA application.
+
+Therefore:
+
+OUTPUT ONLY VALID JSON.
+
+Do not output:
+- Markdown outside code fence
+- Explanations
+- Comments
+- Introduction
+- Conclusion
+- Questions
+- Notes outside JSON
+
+The final response MUST be one valid JSON object conforming to: \`JOST_FMEA_SUBFILE_PKG_V1\`
+
+---
+
+### 1. PRIMARY MISSION
+Given:
+- Component / Assembly Name
+- Part Number
+- Description
+- Session Timestamp ID Prefix
+- Inherited Master Effects Library
+- Inherited Master Controls Library
+
+Autonomously generate a complete FMEA engineering package containing:
+- Structure
+- Functions
+- Requirements
+- Failure Modes
+- Failure Effects
+- Failure Causes
+- Prevention Controls
+- Detection Controls
+- Severity
+- Occurrence
+- Detection
+- RPN
+- AIAG-VDA Action Priority
+- Failure-to-effect mappings
+- Failure-to-cause mappings
+- Cause-to-control mappings
+
+The FMEA must be:
+- technically realistic
+- comprehensive
+- non-duplicative
+- traceable
+- CFT-reviewed internally
+- AIAG-VDA-oriented
+- engineering-driven
+- audit-ready
+- digitally importable
+
+Do not optimize for the number of rows.
+Optimize for: technical completeness + causal accuracy + traceability + risk relevance + control effectiveness.
+
+---
+
+### 2. INTERNAL CFT SIMULATION — MANDATORY
+Before generating JSON, internally perform a CFT review.
+Act simultaneously as the following specialists where relevant:
+
+**A. Systems Engineering**
+Analyze: system purpose, interfaces, operating conditions, system boundaries, functional dependencies, upstream/downstream effects, system-level failures, traceability.
+
+**B. Product Design Engineering**
+Analyze: material, geometry, GD&T, interfaces, strength, stiffness, thermal behavior, fatigue, wear, corrosion, sealing, electrical characteristics, design margins, tolerance stack-up.
+
+**C. Manufacturing / Process Engineering**
+Analyze: manufacturing sequence, joining, machining, forming, molding, casting, heat treatment, coating, assembly, setup, parameter control, process windows, process variation.
+
+**D. Quality Engineering**
+Analyze: inspection strategy, control methods, measurement systems, process capability, defect mechanisms, escape paths, reaction plans, special characteristics.
+
+**E. Reliability Engineering**
+Analyze: life-cycle failures, fatigue, thermal cycling, vibration, environmental exposure, wear, degradation, aging, intermittent failures, latent failures.
+
+**F. Validation / Test Engineering**
+Analyze: DVP, DV testing, PV testing, functional testing, durability testing, environmental testing, validation coverage, test detectability.
+
+**G. Production Engineering**
+Analyze: operator interaction, workstation sequence, takt-related risks, manual assembly, setup/changeover, abnormal production conditions.
+
+**H. Maintenance Engineering**
+Analyze: equipment degradation, tooling wear, fixture degradation, calibration, preventive maintenance, sensor failure, machine failure, recovery/restart conditions.
+
+**I. Supplier Quality Engineering**
+Analyze: incoming material, supplier process variation, supplier special characteristics, material certification, supplier controls, lot variation, incoming inspection.
+
+**J. Logistics / Material Engineering**
+Analyze: storage, handling, identification, traceability, FIFO/FEFO, packaging, transportation, contamination, damage.
+
+**K. Service / Warranty Engineering**
+Analyze: field failure, serviceability, replacement, degradation, customer complaints, warranty modes, diagnostic capability.
+
+**L. OEM / Customer Quality**
+Analyze: assembly plant impact, vehicle/system impact, customer impact, end-user impact, line stoppage, fitment, functional rejection, safety/regulatory consequences.
+
+**M. EHS / Regulatory Engineering**
+Analyze: safety, regulatory compliance, environmental requirements, hazardous failure consequences, legal requirements, applicable automotive regulations.
+
+---
+
+### 3. CFT CONFLICT-RESOLUTION LOGIC
+Internally compare the conclusions of all applicable CFT disciplines.
+When disciplines disagree:
+- Prefer documented engineering requirements.
+- Prefer customer/OEM requirements.
+- Prefer regulatory requirements.
+- Prefer validated test evidence.
+- Prefer historical field evidence.
+- Prefer measured manufacturing data.
+- Prefer engineering standards.
+- Use engineering judgment only when stronger evidence is unavailable.
+
+Do not expose the internal debate in the final JSON. Resolve the disagreement into the most technically defensible final FMEA data. Do not create multiple contradictory rows merely because different CFT members could have different opinions.
+
+---
+
+### 4. INPUT INTERPRETATION
+The user may provide component name, assembly name, part number, description, manufacturing process, product specification, customer requirements, application, inherited effects, inherited controls, previous FMEA, lessons learned, drawings, process information.
+Extract all useful engineering information.
+If some information is missing: DO NOT STOP. Use conservative engineering reasoning based on the component/assembly description and typical automotive engineering failure mechanisms.
+However: NEVER invent exact numerical specifications. Whenever a numerical value, tolerance, pressure, temperature, dimension, force, torque, thickness, percentage, life or limit is required but not supplied, use: \`____\`
+
+---
+
+### 5. NO-HALLUCINATED NUMERICAL VALUES
+This rule is absolute. Never invent: dimensions, tolerances, torque, pressure, temperature, force, voltage, current, frequency, hardness, thickness, clearance, interference, leakage rate, cycle count, life, percentage, capability target, strength, performance limit.
+Use: \`____\`
+Examples: Flatness < \`____\` mm | Torque \`____\` Nm ± \`____\` Nm | Wall thickness > \`____\` mm | Leakage < \`____\` | Operating temperature \`____\` °C to \`____\` °C | Hardness \`____\` HRC ± \`____\` HRC
+
+---
+
+### 6. AUTOMATIC PRODUCT CLASSIFICATION & ASSEMBLY RULE
+Determine whether the supplied item is: Assembly, Sub-System, Component.
+
+For Assembly / Sub-System:
+Prioritize and MUST explicitly analyze interfaces and joining methods for failure modes and causes:
+- Interfaces: mechanical, electrical, thermal, fluid, pneumatic, hydraulic, sealing, alignment, routing, structural, clearance.
+- Joining methods: fastening/bolting, welding (laser, MIG, TIG, spot), brazing, adhesive bonding, crimping, soldering, press fits, riveting, joint integrity, preload, torque retention.
+
+For Individual Component:
+Prioritize: material, geometry, GD&T, thickness, surface finish, hardness, strength, coating, corrosion resistance, mounting interfaces, sealing interfaces, electrical interfaces, functional surfaces, fatigue, wear.
+
+---
+
+### 7. AIAG & VDA 7-STEP METHODOLOGY
+Internally execute all seven steps:
+- STEP 1 — Planning and Preparation
+- STEP 2 — Structure Analysis
+- STEP 3 — Function Analysis
+- STEP 4 — Failure Analysis
+- STEP 5 — Risk Analysis
+- STEP 6 — Optimization
+- STEP 7 — Results Documentation
+
+---
+
+### 8. FUNCTION DOMAIN SELECTION & MANDATORY TOP-SYSTEM FUNCTIONS
+Select domains relevant to the item.
+Available domains: Primary function, Durability and reliability, Appearance, Assembly fitment/packaging, Leakage requirement, Safety function, Regulation function, Servicing, NVH (Noise, Vibration, and Harshness).
+
+**TOP ASSEMBLY / SYSTEM MANDATORY DOMAINS:**
+ONLY for the Top Assembly or System level (root structure node), you MUST evaluate and generate functions for all of the following domains where applicable:
+- Primary function
+- Performance
+- Traceability
+- Serviceability
+- Safety stickers / guidelines
+- Homologation traceability
+- Assembly on vehicle (vehicle-level fitment and integration)
+- Durability & Reliability
+- Safety function
+- Regulation function
+- NVH (Noise, Vibration, and Harshness)
+- Appearance
+
+For lower-level sub-assemblies or individual components, select only domains strictly applicable to that specific element.
+
+---
+
+### 9. PRIMARY FUNCTION
+Identify the main purpose of the component or assembly using: Active Verb + Noun.
+Examples: Transmit torque | Seal fluid | Support load | Locate component | Conduct electrical current | Isolate vibration | Transfer heat | Retain assembly | Control fluid flow | Protect internal components.
+Branding requirements (emblem, logo, decal, visible finish, product identification) belong under Primary function when applicable.
+
+---
+
+### 10. REQUIREMENT GENERATION
+Every meaningful function should have one or more requirements. Requirements must be measurable where possible, technically meaningful, linked to the function, specific enough to support failure analysis. Use \`____\` for unavailable numerical values.
+
+---
+
+### 11. FAILURE MODE COVERAGE — 7 TYPES
+For every applicable function, systematically consider all seven failure mode categories (do not blindly create all seven if technically impossible):
+- TYPE 1 — LOSS OF FUNCTION / COMPLETE FAILURE
+- TYPE 2 — PARTIAL FUNCTION
+- TYPE 3 — INTERMITTENT FUNCTION
+- TYPE 4 — DEGRADATION OF FUNCTION
+- TYPE 5 — UNINTENDED / UNCOMMANDED FUNCTION
+- TYPE 6 — EXCEEDS FUNCTION / OVER-PERFORMANCE
+- TYPE 7 — DELAYED FUNCTION
+Each failure mode should explicitly represent the applicable failure type in its failureModeName (e.g., "[Type 2 - Partial Function] Insufficient clamping force").
+
+---
+
+### 12. FAILURE MODE QUALITY RULE
+Failure modes must be physical or functional conditions. Do NOT use vague statements (Quality issue, Bad part, Defective component, Process problem, Operator error).
+Use physical descriptions: Dimension above specification, Insufficient weld penetration, Insufficient torque, Seal surface damaged, Mounting hole mislocated, Intermittent electrical contact, Complete fracture.
+
+---
+
+### 13. EFFECT ANALYSIS
+For EVERY failure mode, consider all three levels:
+- **END USER LEVEL**: loss of function, degraded performance, warning indication, vehicle breakdown, safety impact, NVH, comfort, drivability, service requirement.
+- **OEM ASSEMBLY PLANT LEVEL**: fitment failure, assembly difficulty, line stoppage, vehicle rework, vehicle rejection, missing component, torque rejection, EOL test failure.
+- **COMPONENT PLANT LEVEL**: scrap, rework, EOL rejection, tooling damage, process interruption, containment, production stoppage.
+
+---
+
+### 14. EFFECT SEVERITY
+Severity is determined from the most serious credible effect:
+- Severity 10: Safety-related failure without warning.
+- Severity 9: Regulation/legal compliance failure.
+- Severity 8: Complete loss of primary function, fitment failure, or durability failure.
+- Severity 7: Degradation/partial loss of primary function, significant fitment problem.
+- Severity 4–6: Moderate comfort, convenience, appearance, manufacturing or rework impact.
+- Severity 1–3: Minor cosmetic or negligible inconvenience.
+Detection effectiveness MUST NOT reduce Severity.
+
+---
+
+### 15. CAUSE ANALYSIS — STRICT NO-CLUBBING RULE
+Identify technically credible root causes across Design, Material, Process, Equipment,joining method characteristics like welding,brazing,riveting,fastening,crimping,soldering,adhesion,etc and Human/System categories.
+
+**STRICT SEPARATE CAUSE ANALYSIS (NO CLUBBING):**
+Each individual root cause must be analyzed and listed SEPARATELY.
+ABSOLUTELY NO CLUBBING, MERGING, OR COMBINING of multiple failure causes into a single cause entry is permitted.
+If a failure mode can be caused by 3 distinct factors (e.g., fastener torque below spec, thread contamination, tool calibration drift), generate 3 separate cause objects with individual Cause IDs. Each cause stands alone with its own characteristics, occurrence, detection, and specific controls.
+
+---
+
+### 16. CAUSE CHARACTERISTIC REQUIREMENT
+Each cause should identify an engineering characteristic (Joint torque, Material grade, Wall thickness, Flatness, Concentricity, Surface roughness, Weld penetration, Crimp height, Bondline thickness, Press-fit interference, Tool wear, Fixture alignment). Use \`____\` for specs where numerical data is missing.
+
+---
+
+### 17. CONTROL CLASSIFICATION
+- **PREVENTION CONTROL**: Controls that prevent the cause from occurring (design rules, FEA, tolerance analysis, GD&T, poka-yoke, interlock, recipe locking, tool-life control, preventive maintenance).
+- **DETECTION CONTROL**: Controls that detect the cause or resulting failure (CMM, vision inspection, automated torque monitoring, leak test, EOL test, electrical test, DVT, pressure test).
+Never label an inspection as Prevention. Never label a design rule as Detection.
+
+---
+
+### 18. CONTROL EFFECTIVENESS
+Do not assume a control is effective merely because it exists. Evaluate automatic vs manual, 100% vs sampling, measurement capability, false negatives, reaction time, human dependency.
+
+---
+
+### 19. MASTER LIBRARY REUSE — ABSOLUTE RULE
+Search inherited libraries before creating new items.
+- EFFECT REUSE: If an existing master effect is technically equivalent, REUSE ITS EXACT ID. Do NOT create a duplicate.
+- CONTROL REUSE: If an existing master prevention or detection control is applicable, REUSE ITS EXACT ID. Do NOT create a duplicate.
+Preserve exact inherited IDs. Never modify or create alternate IDs for inherited objects.
+
+---
+
+### 20. EFFECT REUSE MATCHING
+Consider semantic equivalence and technical consequences, not exact wording.
+
+---
+
+### 21. CONTROL REUSE MATCHING
+Consider the engineering mechanism. Reuse inherited control if it genuinely prevents/detects the cause.
+
+---
+
+### 22. NEW ID GENERATION — STRICT
+Use ONLY the supplied SESSION TIMESTAMP ID PREFIX (e.g., t17253501):
+- Structure: \`struct-{{TIMESTAMP_PREFIX}}\`
+- Functions: \`fn-{{TIMESTAMP_PREFIX}}-01\`
+- Requirements: \`req-{{TIMESTAMP_PREFIX}}-01\`
+- Failure Modes: \`fm-{{TIMESTAMP_PREFIX}}-01\`
+- End User Effects: \`eff-eu-{{TIMESTAMP_PREFIX}}-01\`
+- OEM Effects: \`eff-oem-{{TIMESTAMP_PREFIX}}-01\`
+- Plant Effects: \`eff-plant-{{TIMESTAMP_PREFIX}}-01\`
+- Causes: \`cause-{{TIMESTAMP_PREFIX}}-01\`
+- Prevention Controls: \`ctrl-prev-{{TIMESTAMP_PREFIX}}-01\`
+- Detection Controls: \`ctrl-det-{{TIMESTAMP_PREFIX}}-01\`
+
+---
+
+### 23. ID COLLISION PREVENTION
+Maintain internal registries (\`usedStructureIds\`, \`usedFunctionIds\`, \`usedRequirementIds\`, \`usedFailureModeIds\`, \`usedEffectIds\`, \`usedCauseIds\`, \`usedControlIds\`). All IDs must be unique across the entire package.
+
+---
+
+### 24. DUPLICATE PREVENTION
+Do not create duplicate functions, requirements, failure modes, effects, causes, or controls unless they represent materially different engineering conditions.
+
+---
+
+### 25. FAILURE MODE / EFFECT / CAUSE LOGIC
+- FUNCTION → FAILURE MODE → EFFECT
+- FAILURE MODE ← CAUSE
+- CAUSE → PREVENTION CONTROL and/or DETECTION CONTROL
+
+---
+
+### 26. ONE FAILURE MODE — MULTIPLE EFFECTS
+Map all relevant End User, OEM, and Plant effects in \`failureModeEffects\`.
+
+---
+
+### 27. ONE FAILURE MODE — MULTIPLE CAUSES (SEPARATE CAUSE ANALYSIS)
+A failure mode may have multiple independent causes. Every cause MUST be generated as an independent, individual Cause ID (no clubbing). Map all causes in \`failureModeCauses\`.
+
+---
+
+### 28. ONE CAUSE — MULTIPLE CONTROLS
+Map all applicable prevention and detection controls in \`causeControls\`.
+
+---
+
+### 29. ASSEMBLY-SPECIFIC CHARACTERISTICS & JOINING METHODS
+For assemblies, analyze applicable interfaces and joining methods:
+- Welding: penetration, throat thickness, heat input, porosity, shielding, weld location.
+- Brazing: alloy, gap, overlap, void ratio.
+- Fastening: torque, turn angle, preload, thread engagement, friction/k-factor, threadlocker.
+- Press Fit: interference, insertion force, chamfer, surface roughness.
+- Adhesive: bondline, cure, surface preparation, bond strength.
+- Crimp/Solder: crimp height, crimp width, pull-out force, solder wetting.
+Use \`> ____ mm\`, \`____ mm ± ____ mm\`. Never invent numeric limits.
+
+---
+
+### 30. COMPONENT-SPECIFIC CHARACTERISTICS
+Analyze material grade, alloy, wall thickness, section thickness, coating thickness, GD&T, flatness, concentricity, runout, surface finish, hardness, tensile strength, yield strength, corrosion resistance.
+
+---
+
+### 31. INTERFACE FAILURE ANALYSIS
+Explicitly analyze component-to-component, component-to-vehicle, mechanical, electrical, thermal, fluid, pneumatic, hydraulic, software, communication, sealing, and structural interfaces. Analyze interface failure modes (misalignment, wrong orientation, wrong interface dimensions, insufficient/excessive engagement, clearance issue, connector mismatch, leakage, electrical discontinuity).
+
+---
+
+### 32. ABNORMAL CONDITION ANALYSIS
+Where relevant, analyze startup, shutdown, setup, changeover, maintenance, tool replacement, machine recovery, restart, material change, rework, repair, bypass, manual mode, power interruption, utility failure.
+
+---
+
+### 33. HUMAN ERROR ANALYSIS
+Never stop at "Operator error". Analyze why the error could occur (selection opportunity, sequence error, missing interlock/poka-yoke) and prefer system-level prevention.
+
+---
+
+### 34. SPECIAL CHARACTERISTICS
+Identify special characteristics supported by safety, regulatory, customer, or functional criticality.
+
+---
+
+### 35. OCCURRENCE RATING
+Represent likelihood of cause occurrence using defect data, field data, process capability, or conservative engineering estimates. Do not invent fake PPM data.
+
+---
+
+### 36. DETECTION RATING
+Represent ability of controls to detect cause/failure before escape based on automation, sample size, measurement capability, and test coverage.
+
+---
+
+### 37. RPN
+Calculate: \`RPN = Severity × Occurrence × Detection\`. Supplementary to Action Priority.
+
+---
+
+### 38. ACTION PRIORITY
+Determine H, M, L according to AIAG & VDA Action Priority methodology.
+
+---
+
+### 39. ACTION OPTIMIZATION
+Prioritize Elimination → Design improvement → Robust prevention → Automated prevention → Process improvement → Automated detection → Manual detection → Containment.
+
+---
+
+### 40. PREVENTION-FIRST PRINCIPLE
+Prefer Prevention over Detection whenever technically possible.
+
+---
+
+### 41. DIGITAL TRACEABILITY
+All mapping arrays (\`failureModeEffects\`, \`failureModeCauses\`, \`causeControls\`) must reference existing IDs only. No free-text names in mapping objects.
+
+---
+
+### 42. JSON INTEGRITY
+Validate all structure IDs, function IDs, requirement IDs, effect IDs, cause IDs, control IDs, mapping references, and JSON syntax before output.
+
+---
+
+### 43. COMPLETENESS CHECK
+Perform internal verification of functions, interfaces, material/design/manufacturing characteristics, durability, abnormal conditions, effects at all 3 levels, 7 failure mode types, separate cause analysis, control classification, library reuse, and numeric placeholders (\`____\`).
+
+---
+
+### 44. REQUIRED JSON SCHEMA
+Output exactly this structural model:
+\`\`\`json
+{
+  "packageMagic": "JOST_FMEA_SUBFILE_PKG_V1",
+  "projectName": "Component FMEA Package",
+  "exportedAt": "ISO Date",
+  "structure": [],
+  "variants": [],
+  "functions": [],
+  "requirements": [],
+  "functionLines": [],
+  "libraries": {
+    "effects": [],
+    "causes": [],
+    "controls": []
+  },
+  "failureModeEffects": {},
+  "failureModeCauses": {},
+  "causeControls": {}
+}
+\`\`\`
+
+---
+
+### 45. STRUCTURE OBJECT
+\`\`\`json
+{
+  "id": "struct-{{TIMESTAMP_PREFIX}}",
+  "name": "Component or Assembly Name",
+  "type": "Sub-System | Component",
+  "partNumber": "PART-NO",
+  "description": "Description"
+}
+\`\`\`
+
+---
+
+### 46. FUNCTION OBJECT
+\`\`\`json
+{
+  "id": "fn-{{TIMESTAMP_PREFIX}}-01",
+  "structId": "struct-{{TIMESTAMP_PREFIX}}",
+  "name": "Active Verb + Noun Statement",
+  "type": "Primary function | Durability and reliability | Appearance | Assembly fitment/packaging | Leakage requirement | Safety function | Regulation function | Servicing | NVH (Noise, Vibration, and Harshness)"
+}
+\`\`\`
+
+---
+
+### 47. REQUIREMENT OBJECT
+\`\`\`json
+{
+  "id": "req-{{TIMESTAMP_PREFIX}}-01",
+  "structId": "struct-{{TIMESTAMP_PREFIX}}",
+  "functionId": "fn-{{TIMESTAMP_PREFIX}}-01",
+  "desc": "Requirement statement using ____ where numerical data is unavailable",
+  "spec": "Specification target using ____ where numerical data is unavailable"
+}
+\`\`\`
+
+---
+
+### 48. FUNCTION LINE OBJECT
+\`\`\`json
+{
+  "id": "fl-{{TIMESTAMP_PREFIX}}-01",
+  "structId": "struct-{{TIMESTAMP_PREFIX}}",
+  "functionId": "fn-{{TIMESTAMP_PREFIX}}-01",
+  "requirementId": "req-{{TIMESTAMP_PREFIX}}-01",
+  "failureModeId": "fm-{{TIMESTAMP_PREFIX}}-01",
+  "failureModeName": "[Type X - Category] Specific physical failure mode",
+  "severity": 8,
+  "occurrence": 3,
+  "detection": 2,
+  "rpn": 48,
+  "ap": "M"
+}
+\`\`\`
+
+---
+
+### 49. EFFECT OBJECT
+New effects created specifically for this package (do NOT create if reusing inherited ID):
+- **End User**: \`{"id": "eff-eu-{{TIMESTAMP_PREFIX}}-01", "category": "End User Level", "desc": "[End User Level]: Impact description", "severity": 8}\`
+- **OEM**: \`{"id": "eff-oem-{{TIMESTAMP_PREFIX}}-01", "category": "OEM Assembly Plant Level", "desc": "[OEM Plant Level]: Impact description on assembly line", "severity": 8}\`
+- **Plant**: \`{"id": "eff-plant-{{TIMESTAMP_PREFIX}}-01", "category": "Component Plant Level", "desc": "[Component Plant Level]: Impact description on component factory", "severity": 7}\`
+
+---
+
+### 50. CAUSE OBJECT (STRICT INDIVIDUAL ENTRY — NO CLUBBING)
+\`\`\`json
+{
+  "id": "cause-{{TIMESTAMP_PREFIX}}-01",
+  "details": "Technically specific single root cause (individual analysis, no clubbing)",
+  "characteristics": "Design/Material/Process Characteristic",
+  "spec": "Target specification using ____",
+  "occurrence": 3,
+  "detection": 2
+}
+\`\`\`
+
+---
+
+### 51. CONTROL OBJECT
+- **Prevention**: \`{"id": "ctrl-prev-{{TIMESTAMP_PREFIX}}-01", "desc": "Specific prevention control", "type": "Prevention"}\`
+- **Detection**: \`{"id": "ctrl-det-{{TIMESTAMP_PREFIX}}-01", "desc": "Specific detection control", "type": "Detection"}\`
+Do not create new control if equivalent inherited control exists.
+
+---
+
+### 52. MAPPING OBJECTS
+\`\`\`json
+{
+  "failureModeEffects": {
+    "fm-{{TIMESTAMP_PREFIX}}-01": ["eff-eu-{{TIMESTAMP_PREFIX}}-01", "eff-oem-{{TIMESTAMP_PREFIX}}-01", "eff-plant-{{TIMESTAMP_PREFIX}}-01"]
+  },
+  "failureModeCauses": {
+    "fm-{{TIMESTAMP_PREFIX}}-01": ["cause-{{TIMESTAMP_PREFIX}}-01", "cause-{{TIMESTAMP_PREFIX}}-02"]
+  },
+  "causeControls": {
+    "cause-{{TIMESTAMP_PREFIX}}-01": ["ctrl-prev-{{TIMESTAMP_PREFIX}}-01", "ctrl-det-{{TIMESTAMP_PREFIX}}-01"]
+  }
+}
+\`\`\`
+
+---
+
+### 53. LIBRARY DEDUPLICATION RULE
+The libraries section must contain ONLY newly created effects, causes, and controls. Inherited effects and controls MUST NOT be copied into local libraries; their inherited IDs are referenced directly in mapping objects.
+
+---
+
+### 54. ENGINEERING DEPTH REQUIREMENT
+Investigate direct failure, interface failure, dimensional failure, material failure, process-induced failure, degradation, environmental failure, assembly-induced failure, intermittent behavior, unintended behavior, delayed behavior, excessive behavior. Retain all technically credible mechanisms.
+
+---
+
+### 55. FAILURE CHAIN VALIDATION
+Internally verify: Function causes Failure Mode which causes Effect; Cause realistically creates Failure Mode; Prevention Control realistically prevents Cause; Detection Control realistically detects Cause/Failure.
+
+---
+
+### 56. FINAL SELF-CRITIQUE
+Perform internal independent review as Design Reviewer, Manufacturing Reviewer, Quality Reviewer, Reliability Reviewer, Validation Reviewer, OEM Reviewer, and Auditor.
+
+---
+
+### 57. FINAL OUTPUT RULE
+After all internal analysis and CFT reconciliation:
+RETURN ONLY THE FINAL VALID JSON OBJECT.
+No explanation. No assumptions section. No CFT discussion. No markdown outside code fence. No commentary. The JSON must be immediately consumable by the JOST FMEA application.`;
+
+
+
+const defaultpromptrule=`#TOKEN EFFICIENCY AND OUTPUT MAXIMIZATION
+
+The AI must produce the **maximum technically credible coverage** while respecting the token budget. To achieve this:
+
+- **Use the most compact JSON representation:** Omit all optional whitespace, comments, and empty fields (unless required by the schema). Use short but unambiguous IDs and descriptions.
+- **Do not truncate or summarize:** Generate every independent failure mode, effect, cause, and control that passes the technical credibility test. If the full response would exceed the token limit, **generate all high‑severity (≥8) and safety‑critical (CC/SC) items first**, followed by lower‑priority items in order of risk relevance. Clearly state in the final JSON (e.g., via a '"truncated": true' flag and '"totalItems"'' count) if the output is incomplete, and indicate that additional items can be provided in a follow‑up request.
+- **Avoid repetition:** Use inherited library IDs to reference existing effects, causes, and controls instead of re‑creating them.
+- **Concise descriptions:** Failure modes and effects must be phrased in the shortest technically accurate form (e.g., "Flange OD oversized" not "The flange outside diameter is larger than the upper specification limit").
+- **Batch similar items:** Where multiple micro‑activities share the same failure mode, group them under that failure mode (the schema already supports multiple causes per failure mode) to avoid duplicating the failure mode object.
+
+By following these rules, the AI maximizes the number of distinct, credible failure paths included in each response.
+
+# 77. HANDLING LARGE OUTPUT AND CONTINUATION
+
+If, after applying the efficiency rules, the complete PFMEA output still exceeds the available token limit, the engine **SHALL**:
+
+1. Generate a **partial but complete and valid JSON object** that includes all items that fit within the token limit.
+2. Include the following top‑level fields in the output:
+   - "truncated": true
+   - "totalFailureModes": the total number of failure modes identified in the full analysis.
+   - "totalCauses": the total number of causes identified.
+   - "remainingItems": a brief summary of what was omitted (e.g., "Additional effects and controls for FM_10_2 through FM_10_5").
+3. Do **not** stop prematurely; generate as many high‑priority items as possible.
+4. The user may then request the continuation by referencing the same operationId and providing the omitted section(s). In the continuation response, the engine will output the remaining items, and the final assembled JSON (combining all parts) will be valid.
+
+This ensures that no technically credible item is discarded due to length limitations.`
+
+
+
+    // Master Prompt Library Storage
+    let masterPromptLibrary = [
+      {
+        id: "prompt-default-aiag-vda",
+        name: "Standard AIAG-VDA 7-Step FMEA Master (Default)",
+        isDefault: true,
+        isActive: true,
+        content: DEFAULT_MASTER_SYSTEM_PROMPT
+      },
+      {
+        id: "prompt-cft-automotive-dfmea",
+        name: "Multidisciplinary CFT Automotive DFMEA Master (Exhaustive & Granular)",
+        isDefault: true,
+        isActive: true,
+        content: CFT_AUTOMOTIVE_DFMEA_MASTER_PROMPT
+      },
+      {
+        id: "prompt-cft-automotive-vda-traceability",
+        name: "Autonomous AIAG & VDA CFT FMEA Engine (master_fmea_engine_prompt.md)",
+        isDefault: true,
+        isActive: true,
+        content: CFT_AUTOMOTIVE_DFMEA_VDA_TRACEABILITY_PROMPT
+      }
+    ];
+    let activeMasterPromptId = "prompt-cft-automotive-vda-traceability"; // Set new prompt as active default
+
+    // Predefined Master Controls Library (System-Generated sysId + Editable userRefId)
+    let predefinedControlsMode = false;
+    let predefinedControlsList = [
+      { sysId: "ctrl-sys-1001", userRefId: "DVT-THERM-01", type: "Detection", desc: "Thermal shock cycling DVT test -40°C to +105°C for 1000 cycles per ISO 16750-4" },
+      { sysId: "ctrl-sys-1002", userRefId: "PC-DESIGN-701", type: "Prevention", desc: "Design Rule DR-701 for minimum wall section thickness > 3.0mm & CFD clearance modeling" },
+      { sysId: "ctrl-sys-1003", userRefId: "EOL-LEAK-01", type: "Detection", desc: "100% Automated helium mass-spectrometer leak test at 2.5 bar pressure" }
+    ];
+
+    let currentSelectedTreeNodeId = null;
+
+    // Initialize Page
+    window.addEventListener('DOMContentLoaded', () => {
+      renderMainPageTreeVisualizer();
+      renderStructureTreeModalList();
+      renderPredefinedControlsModalList();
+      renderMasterPromptLibrarySelect();
+      renderMasterPromptModalList();
+      
+      // Sync checkbox state
+      document.getElementById('chkPredefinedMode').checked = predefinedControlsMode;
+      document.getElementById('modalChkPredefinedMode').checked = predefinedControlsMode;
+
+      // Auto focus top item if available and eligible
+      if (systemStructureTree.length > 0) {
+        selectTreeNodeForPrompting(systemStructureTree[0].id);
+      } else {
+        generateAiPrompts();
+      }
+    });
+
+    // Modal Control Functions
+    function openUserGuideModal() {
+      const modal = document.getElementById('userGuideModal');
+      if (modal) modal.classList.add('active');
+    }
+
+    function closeUserGuideModal() {
+      const modal = document.getElementById('userGuideModal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    function openStructureTreeModal() {
+      renderStructureTreeParentSelect();
+      renderStructureTreeModalList();
+      const modal = document.getElementById('structureTreeModal');
+      if (modal) modal.classList.add('active');
+    }
+
+    function closeStructureTreeModal() {
+      const modal = document.getElementById('structureTreeModal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    function openPredefinedControlsModal() {
+      renderPredefinedControlsModalList();
+      const modal = document.getElementById('predefinedControlsModal');
+      if (modal) modal.classList.add('active');
+    }
+
+    function closePredefinedControlsModal() {
+      const modal = document.getElementById('predefinedControlsModal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    function openMasterPromptLibraryModal() {
+      renderMasterPromptModalList();
+      const modal = document.getElementById('masterPromptLibraryModal');
+      if (modal) modal.classList.add('active');
+    }
+
+    function closeMasterPromptLibraryModal() {
+      const modal = document.getElementById('masterPromptLibraryModal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeUserGuideModal();
+        closeStructureTreeModal();
+        closePredefinedControlsModal();
+        closeMasterPromptLibraryModal();
+      }
+    });
+
+    // MASTER PROMPT LIBRARY MANAGER
+    function renderMasterPromptLibrarySelect() {
+      const select = document.getElementById('activeMasterPromptSelect');
+      if (!select) return;
+
+      const activePrompts = masterPromptLibrary.filter(p => p.isActive !== false);
+
+      if (!activePrompts.some(p => p.id === activeMasterPromptId) && activePrompts.length > 0) {
+        activeMasterPromptId = activePrompts[0].id;
+      }
+
+      if (activePrompts.length === 0) {
+        select.innerHTML = `<option value="">-- No Active Master Prompts --</option>`;
+        return;
+      }
+
+      select.innerHTML = activePrompts.map(mp => {
+        return `<option value="${mp.id}" ${mp.id === activeMasterPromptId ? 'selected' : ''}>${escapeHtml(mp.name)} ${mp.isDefault ? '(Built-in Default)' : ''}</option>`;
+      }).join('');
+    }
+
+    function switchActiveMasterPrompt(promptId) {
+      const item = masterPromptLibrary.find(p => p.id === promptId);
+      if (!item || item.isActive === false) return;
+
+      activeMasterPromptId = promptId;
+      renderMasterPromptLibrarySelect();
+      renderMasterPromptModalList();
+      generateAiPrompts();
+      showToast("📜 Switched active Master System Prompt!", "📜");
+    }
+
+    function toggleMasterPromptActive(promptId) {
+      const item = masterPromptLibrary.find(p => p.id === promptId);
+      if (!item) return;
+
+      if (item.isActive !== false) {
+        const activeCount = masterPromptLibrary.filter(p => p.isActive !== false).length;
+        if (activeCount <= 1) {
+          alert("At least one Master System Prompt must remain active.");
+          return;
+        }
+        item.isActive = false;
+        if (activeMasterPromptId === promptId) {
+          const nextActive = masterPromptLibrary.find(p => p.isActive !== false);
+          if (nextActive) activeMasterPromptId = nextActive.id;
+        }
+        showToast(`⚪ Prompt "${item.name}" set to Inactive.`, "⚪");
+      } else {
+        item.isActive = true;
+        showToast(`🟢 Prompt "${item.name}" set to Active!`, "🟢");
+      }
+
+      renderMasterPromptLibrarySelect();
+      renderMasterPromptModalList();
+      generateAiPrompts();
+    }
+
+    function renderMasterPromptModalList() {
+      const container = document.getElementById('masterPromptListContainer');
+      const countSpan = document.getElementById('mpCount');
+
+      const totalCount = masterPromptLibrary.length;
+      const activeCount = masterPromptLibrary.filter(p => p.isActive !== false).length;
+      if (countSpan) countSpan.innerText = `${activeCount} Active / ${totalCount} Total`;
+
+      if (!container) return;
+
+      container.innerHTML = masterPromptLibrary.map(mp => {
+        const isSelected = mp.id === activeMasterPromptId;
+        const isActive = mp.isActive !== false;
+
+        return `
+          <div style="background:#0f172a; border:1px solid ${isSelected ? '#38bdf8' : (isActive ? 'var(--border-color)' : '#334155')}; border-radius:8px; padding:12px; margin-bottom:10px; ${!isActive ? 'opacity: 0.75;' : ''}">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; flex-wrap:wrap; gap:6px;">
+              <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:180px;">
+                <strong style="color:${isSelected ? '#38bdf8' : (isActive ? '#fff' : '#94a3b8')}; font-size:12px;">
+                  ${escapeHtml(mp.name)} ${mp.isDefault ? '<span class="badge badge-purple" style="font-size:8px;">Default</span>' : ''}
+                </strong>
+                ${isActive ? '<span class="badge badge-green" style="font-size:8.5px;">Active</span>' : '<span class="badge badge-gray" style="font-size:8.5px; background:rgba(100,116,139,0.3); color:#94a3b8;">Inactive</span>'}
+              </div>
+              <div style="display:flex; gap:6px; align-items:center;">
+                <button class="btn btn-sm ${isActive ? 'btn-secondary' : 'btn-green'}" style="padding:2px 6px; font-size:10px;" onclick="toggleMasterPromptActive('${mp.id}')" title="${isActive ? 'Make Prompt Inactive' : 'Make Prompt Active'}">
+                  ${isActive ? '⚪ Make Inactive' : '🟢 Make Active'}
+                </button>
+                ${isActive && !isSelected ? `<button class="btn btn-primary btn-sm" style="padding:2px 6px; font-size:10px;" onclick="switchActiveMasterPrompt('${mp.id}')">🎯 Select</button>` : ''}
+                ${isSelected && isActive ? `<span class="badge badge-blue" style="font-size:9px;">Selected</span>` : ''}
+                ${!mp.isDefault ? `
+                  <button class="btn btn-secondary btn-sm" style="padding:2px 6px; font-size:10px;" onclick="editMasterPromptItem('${mp.id}')">✏️ Edit</button>
+                  <button class="btn btn-secondary btn-sm" style="padding:2px 6px; font-size:10px;" onclick="deleteMasterPromptItem('${mp.id}')">🗑️</button>
+                ` : ''}
+              </div>
+            </div>
+            <div style="font-family:var(--font-mono); font-size:10px; color:#94a3b8; max-height:70px; overflow:hidden; text-overflow:ellipsis; white-space:pre-wrap; background:#060a12; padding:6px; border-radius:4px;">
+              ${escapeHtml(mp.content)}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function saveMasterPromptItem() {
+      const editId = document.getElementById('mpEditId').value;
+      const name = document.getElementById('mpName').value.trim();
+      const content = document.getElementById('mpContent').value.trim();
+      const isActive = document.getElementById('mpIsActive').checked;
+
+      if (!name || !content) {
+        alert("Please enter both a Master Prompt Title and System Prompt Content.");
+        return;
+      }
+
+      if (editId) {
+        const item = masterPromptLibrary.find(p => p.id === editId);
+        if (item) {
+          item.name = name;
+          item.content = content;
+          item.isActive = isActive;
+        }
+        showToast("✏️ Updated master prompt in library!", "✏️");
+      } else {
+        const newId = 'mp-custom-' + Date.now().toString().slice(-6);
+        masterPromptLibrary.push({
+          id: newId,
+          name: name,
+          isDefault: false,
+          isActive: isActive,
+          content: content
+        });
+        if (isActive) {
+          activeMasterPromptId = newId;
+        }
+        showToast("➕ Added new Master Prompt to library!", "➕");
+      }
+
+      clearMasterPromptForm();
+      renderMasterPromptLibrarySelect();
+      renderMasterPromptModalList();
+      generateAiPrompts();
+    }
+
+    function editMasterPromptItem(promptId) {
+      const item = masterPromptLibrary.find(p => p.id === promptId);
+      if (!item || item.isDefault) return;
+
+      document.getElementById('mpEditId').value = item.id;
+      document.getElementById('mpName').value = item.name;
+      document.getElementById('mpContent').value = item.content;
+      document.getElementById('mpIsActive').checked = item.isActive !== false;
+
+      document.getElementById('mpFormTitle').innerText = '✏️ Edit Master Prompt';
+      document.getElementById('btnSaveMp').innerText = '💾 Save Prompt';
+    }
+
+    async function deleteMasterPromptItem(promptId) {
+      const item = masterPromptLibrary.find(p => p.id === promptId);
+      if (!item || item.isDefault) {
+        alert("Default built-in master prompt cannot be deleted.");
+        return;
+      }
+
+      const isConfirmed = await showCustomConfirm(`Are you sure you want to delete "${item.name}"?`, 'Delete Master Prompt', 'warning');
+      if (!isConfirmed) return;
+
+      masterPromptLibrary = masterPromptLibrary.filter(p => p.id !== promptId);
+      if (activeMasterPromptId === promptId) {
+        const nextActive = masterPromptLibrary.find(p => p.isActive !== false);
+        activeMasterPromptId = nextActive ? nextActive.id : "prompt-default-aiag-vda";
+      }
+
+      renderMasterPromptLibrarySelect();
+      renderMasterPromptModalList();
+      generateAiPrompts();
+      showToast("🗑️ Removed Master Prompt.", "🗑️");
+    }
+
+    function clearMasterPromptForm() {
+      document.getElementById('mpEditId').value = '';
+      document.getElementById('mpName').value = '';
+      document.getElementById('mpContent').value = '';
+      document.getElementById('mpIsActive').checked = true;
+      document.getElementById('mpFormTitle').innerText = '➕ Add Custom Master Prompt';
+      document.getElementById('btnSaveMp').innerText = '➕ Save Master Prompt';
+    }
+
+
+    // PREDEFINED CONTROLS (DVP & CONTROL PLAN) MANAGEMENT
+    function togglePredefinedModeFromCheckbox(checked) {
+      predefinedControlsMode = checked;
+      document.getElementById('chkPredefinedMode').checked = checked;
+      document.getElementById('modalChkPredefinedMode').checked = checked;
+      
+      generateAiPrompts();
+      showToast(checked ? "🛡️ Strict Predefined Controls Mode ON" : "ℹ️ Free-form Controls Mode ON", "🛡️");
+    }
+
+    function renderPredefinedControlsModalList() {
+      const container = document.getElementById('predefinedControlsListContainer');
+      const countSpan = document.getElementById('prectrlCount');
+      if (countSpan) countSpan.innerText = predefinedControlsList.length;
+
+      if (!container) return;
+
+      if (predefinedControlsList.length === 0) {
+        container.innerHTML = `
+          <div style="text-align:center; padding: 24px; color: var(--text-muted); font-size:12px;">
+            📭 Predefined controls library is empty.<br>Add your DVP tests or Control Plan items on the left.
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = predefinedControlsList.map(ctrl => {
+        const badgeClass = ctrl.type === 'Prevention' ? 'badge-purple' : 'badge-green';
+        const userRef = ctrl.userRefId ? `<span class="badge badge-blue" style="font-size:9px;">Ref: ${escapeHtml(ctrl.userRefId)}</span>` : '';
+        
+        return `
+          <div style="background:#0f172a; border:1px solid var(--border-color); border-radius:8px; padding:10px; margin-bottom:8px; display:flex; align-items:center; justify-content:space-between;">
+            <div style="flex:1; padding-right:10px;">
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:3px;">
+                <code style="color:#38bdf8; font-size:10px; font-weight:bold;" title="System-Generated Internal ID">${escapeHtml(ctrl.sysId)}</code>
+                ${userRef}
+                <span class="badge ${badgeClass}">${escapeHtml(ctrl.type)}</span>
+              </div>
+              <div style="font-size:11px; color:#cbd5e1;">${escapeHtml(ctrl.desc)}</div>
+            </div>
+            <div style="display:flex; gap:6px;">
+              <button class="btn btn-secondary btn-sm" onclick="editPredefinedControlItem('${ctrl.sysId}')">✏️ Edit</button>
+              <button class="btn btn-secondary btn-sm" onclick="removePredefinedControlItem('${ctrl.sysId}')">🗑️</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function savePredefinedControlItem() {
+      const editSysId = document.getElementById('prectrlEditSysId').value;
+      const userRefId = document.getElementById('prectrlUserRefId').value.trim();
+      const type = document.getElementById('prectrlType').value;
+      const desc = document.getElementById('prectrlDesc').value.trim();
+
+      if (!desc) {
+        alert("Please enter a Control Description.");
+        return;
+      }
+
+      if (editSysId) {
+        const item = predefinedControlsList.find(c => c.sysId === editSysId);
+        if (item) {
+          item.userRefId = userRefId || item.userRefId || ('DVP-REF-' + Date.now().toString().slice(-4));
+          item.type = type;
+          item.desc = desc;
+        }
+        showToast("✏️ Updated control item!", "✏️");
+      } else {
+        const autoSysId = 'ctrl-sys-' + Date.now().toString().slice(-6);
+        const autoRefId = userRefId || ('DVP-REF-' + Date.now().toString().slice(-4));
+
+        predefinedControlsList.push({
+          sysId: autoSysId,
+          userRefId: autoRefId,
+          type: type,
+          desc: desc
+        });
+        showToast("➕ Added control item with System-Generated ID!", "➕");
+      }
+
+      clearPredefinedControlForm();
+      renderPredefinedControlsModalList();
+      generateAiPrompts();
+    }
+
+    function editPredefinedControlItem(sysId) {
+      const item = predefinedControlsList.find(c => c.sysId === sysId);
+      if (!item) return;
+
+      document.getElementById('prectrlEditSysId').value = item.sysId;
+      document.getElementById('prectrlUserRefId').value = item.userRefId || '';
+      document.getElementById('prectrlType').value = item.type || 'Prevention';
+      document.getElementById('prectrlDesc').value = item.desc || '';
+
+      document.getElementById('prectrlFormTitle').innerText = `✏️ Edit DVP Control (${item.sysId})`;
+      document.getElementById('btnSavePrectrl').innerText = '💾 Save Changes';
+    }
+
+    async function removePredefinedControlItem(sysId) {
+      const isConfirmed = await showCustomConfirm("Are you sure you want to remove this control item?", "Remove Control", "warning");
+      if (!isConfirmed) return;
+      predefinedControlsList = predefinedControlsList.filter(c => c.sysId !== sysId);
+      renderPredefinedControlsModalList();
+      generateAiPrompts();
+      showToast("🗑️ Removed control item from library.", "🗑️");
+    }
+
+    async function clearAllPredefinedControls() {
+      const isConfirmed = await showCustomConfirm("Are you sure you want to clear all items in the predefined controls library?", "Clear Controls Library", "warning");
+      if (!isConfirmed) return;
+      predefinedControlsList = [];
+      renderPredefinedControlsModalList();
+      generateAiPrompts();
+      showToast("🧹 Predefined controls library cleared.", "🧹");
+    }
+
+    function clearPredefinedControlForm() {
+      document.getElementById('prectrlEditSysId').value = '';
+      document.getElementById('prectrlUserRefId').value = '';
+      document.getElementById('prectrlDesc').value = '';
+      document.getElementById('prectrlFormTitle').innerText = '➕ Add Master DVP / Control Plan Item';
+      document.getElementById('btnSavePrectrl').innerText = '➕ Save Control';
+    }
+
+
+    // SAVE & LOAD WORKSTATION SESSION FILE (.jostws)
+    function saveWorkstationSessionFile() {
+      const sessionData = {
+        magic: "JOST_AI_WORKSTATION_SESSION_V1",
+        savedAt: new Date().toISOString(),
+        systemStructureTree: systemStructureTree,
+        masterPromptLibrary: masterPromptLibrary,
+        activeMasterPromptId: activeMasterPromptId,
+        predefinedControlsMode: predefinedControlsMode,
+        predefinedControlsList: predefinedControlsList,
+        fmeaPackageState: fmeaPackageState
+      };
+
+      const jsonStr = JSON.stringify(sessionData, null, 2);
+      const blob = new Blob([jsonStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `JOST_FMEA_Workstation_Session_${new Date().toISOString().slice(0,10)}.jostws`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      showToast("💾 Saved Workstation Session File (.jostws)!", "💾");
+    }
+
+    function triggerLoadSessionFile() {
+      document.getElementById('loadSessionFileInput').click();
+    }
+
+    function loadWorkstationSessionFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const session = JSON.parse(e.target.result);
+
+          if (session.magic !== "JOST_AI_WORKSTATION_SESSION_V1" && !session.systemStructureTree) {
+            alert("Invalid session file format. Expected a JOST Workstation session file.");
+            return;
+          }
+
+          if (session.systemStructureTree) systemStructureTree = session.systemStructureTree;
+          if (session.masterPromptLibrary) {
+            masterPromptLibrary = session.masterPromptLibrary.map(mp => ({
+              ...mp,
+              isActive: mp.isActive !== undefined ? mp.isActive : true
+            }));
+          }
+          if (session.activeMasterPromptId) activeMasterPromptId = session.activeMasterPromptId;
+          if (typeof session.predefinedControlsMode === 'boolean') predefinedControlsMode = session.predefinedControlsMode;
+          if (session.predefinedControlsList) predefinedControlsList = session.predefinedControlsList;
+          if (session.fmeaPackageState) fmeaPackageState = session.fmeaPackageState;
+
+          document.getElementById('chkPredefinedMode').checked = predefinedControlsMode;
+          document.getElementById('modalChkPredefinedMode').checked = predefinedControlsMode;
+
+          renderMainPageTreeVisualizer();
+          renderStructureTreeModalList();
+          renderMasterPromptLibrarySelect();
+          renderMasterPromptModalList();
+          renderPredefinedControlsModalList();
+          renderPackageInventoryTable();
+          renderEffectsLibraryTable();
+
+          if (systemStructureTree.length > 0) {
+            selectTreeNodeForPrompting(systemStructureTree[0].id);
+          } else {
+            generateAiPrompts();
+          }
+
+          showToast("📂 Workstation Session Restored Successfully!", "📂");
+
+        } catch (err) {
+          alert("Error parsing workstation session file: " + err.message);
+        }
+      };
+
+      reader.readAsText(file);
+      event.target.value = ''; // Reset input
+    }
+
+
+    // STRICT TOP-TO-BOTTOM PREDECESSOR ELIGIBILITY CHECK
+    function isNodeEligibleForGeneration(nodeId) {
+      const node = systemStructureTree.find(n => n.id === nodeId);
+      if (!node) return false;
+
+      if (node.status === 'Completed') return true;
+
+      if (node.parentId) {
+        const parentNode = systemStructureTree.find(p => p.id === node.parentId);
+        if (parentNode && parentNode.status !== 'Completed') {
+          return false;
+        }
+      }
+
+      const flatList = getFlatTopToBottomSequence();
+      const nodeIndex = flatList.findIndex(n => n.id === nodeId);
+      if (nodeIndex > 0) {
+        for (let i = 0; i < nodeIndex; i++) {
+          if (flatList[i].status !== 'Completed') {
+            return false;
+          }
+        }
+      }
+
+      return true;
+    }
+
+    function getFlatTopToBottomSequence() {
+      const list = [];
+      function traverse(node) {
+        list.push(node);
+        const children = systemStructureTree.filter(c => c.parentId === node.id);
+        children.forEach(c => traverse(c));
+      }
+      const roots = systemStructureTree.filter(n => !n.parentId);
+      roots.forEach(r => traverse(r));
+      return list;
+    }
+
+    // FOLDER EXPLORER TREE VIEW RENDERER FOR MAIN PAGE & POPUP MODAL
+    function renderMainPageTreeVisualizer() {
+      renderFolderTreeContainer('mainPageTreeVisualizerContainer', false);
+    }
+
+    function renderStructureTreeModalList() {
+      renderFolderTreeContainer('modalTreeVisualizerContainer', true);
+      const countSpan = document.getElementById('treeTotalCount');
+      if (countSpan) countSpan.innerText = systemStructureTree.length;
+    }
+
+    function renderFolderTreeContainer(containerId, isModalView = false) {
+      const container = document.getElementById(containerId);
+      const progressText = document.getElementById('treeProgressPercentText');
+      const progressBar = document.getElementById('treeProgressBarFill');
+
+      const totalNodes = systemStructureTree.length;
+      const completedNodes = systemStructureTree.filter(n => n.status === 'Completed').length;
+      const percent = totalNodes > 0 ? Math.round((completedNodes / totalNodes) * 100) : 0;
+
+      if (progressText) progressText.innerText = `${percent}% (${completedNodes}/${totalNodes})`;
+      if (progressBar) progressBar.style.width = `${percent}%`;
+
+      if (!container) return;
+
+      if (totalNodes === 0) {
+        container.innerHTML = `
+          <div style="text-align:center; padding: 24px 10px; color: var(--text-muted); font-size:11px;">
+            📭 Folder tree is empty.<br>Add your first assembly folder to get started.
+          </div>
+        `;
+        return;
+      }
+
+      let html = '';
+
+      function renderFolderNode(node, level = 0, isLastChild = true) {
+        const isActive = currentSelectedTreeNodeId === node.id;
+        const isComp = node.status === 'Completed';
+        const isEligible = isNodeEligibleForGeneration(node.id);
+
+        const children = systemStructureTree.filter(child => child.parentId === node.id);
+        const hasChildren = children.length > 0;
+        const isExpanded = node.isExpanded !== false;
+
+        let icon = node.isAssembly ? (isExpanded ? '📂' : '📁') : '📄';
+        let toggleArrow = hasChildren ? (isExpanded ? '▼' : '►') : '&nbsp;&nbsp;';
+
+        let indentStr = '';
+        for (let i = 0; i < level; i++) {
+          indentStr += '<span class="tree-indent-prefix">│&nbsp;&nbsp;</span>';
+        }
+        if (level > 0) {
+          indentStr += `<span class="tree-indent-prefix">${isLastChild ? '└──' : '├──'}</span>`;
+        }
+
+        let statusBadge = isComp ? 
+          `<span class="badge badge-green" style="font-size:8px;">🟢 Done</span>` : 
+          (isEligible ? `<span class="badge badge-amber" style="font-size:8px;">⚪ Ready</span>` : `<span class="badge badge-gray" style="font-size:8px;">🔒 Locked</span>`);
+
+        const actionButtons = isModalView ? `
+          <div style="display:flex; gap:4px; margin-left:8px;" onclick="event.stopPropagation();">
+            <button class="btn btn-secondary btn-sm" style="padding:2px 5px; font-size:10px;" onclick="editTreeNodeItem('${node.id}')">✏️</button>
+            <button class="btn btn-secondary btn-sm" style="padding:2px 5px; font-size:10px;" onclick="deleteTreeNodeItem('${node.id}')">🗑️</button>
+          </div>
+        ` : '';
+
+        html += `
+          <div class="folder-tree-row ${isActive ? 'active' : ''} ${isComp ? 'completed' : ''} ${!isEligible ? 'locked' : ''}" onclick="selectTreeNodeForPrompting('${node.id}')">
+            <div style="display:flex; align-items:center; gap:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+              ${indentStr}
+              ${hasChildren ? `<span class="folder-toggle-btn" onclick="toggleFolderExpand(event, '${node.id}')">${toggleArrow}</span>` : '<span style="width:14px; display:inline-block;"></span>'}
+              <span>${icon}</span>
+              <span style="font-weight:${node.isAssembly ? '700' : '400'}; font-size:11px; color:${!isEligible ? 'var(--text-muted)' : 'inherit'};">${escapeHtml(node.name)}</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:4px;">
+              ${statusBadge}
+              ${actionButtons}
+            </div>
+          </div>
+        `;
+
+        if (hasChildren && isExpanded) {
+          children.forEach((child, idx) => {
+            const isLast = idx === children.length - 1;
+            renderFolderNode(child, level + 1, isLast);
+          });
+        }
+      }
+
+      const rootNodes = systemStructureTree.filter(node => !node.parentId);
+      rootNodes.forEach((root, idx) => {
+        const isLast = idx === rootNodes.length - 1;
+        renderFolderNode(root, 0, isLast);
+      });
+
+      container.innerHTML = html;
+    }
+
+    function toggleFolderExpand(e, nodeId) {
+      e.stopPropagation();
+      const node = systemStructureTree.find(n => n.id === nodeId);
+      if (node) {
+        node.isExpanded = !node.isExpanded;
+        renderMainPageTreeVisualizer();
+        renderStructureTreeModalList();
+      }
+    }
+
+    function autoSelectNextInSequence() {
+      const flatList = getFlatTopToBottomSequence();
+      const nextNode = flatList.find(n => n.status !== 'Completed' && isNodeEligibleForGeneration(n.id));
+      
+      if (nextNode) {
+        selectTreeNodeForPrompting(nextNode.id);
+        showToast(`▶️ Focused next eligible component: "${nextNode.name}"`, "▶️");
+      } else {
+        const remainingUncompleted = flatList.filter(n => n.status !== 'Completed');
+        if (remainingUncompleted.length > 0) {
+          alert(`🔒 Cannot advance: Please complete parent node "${remainingUncompleted[0].name}" first!`);
+        } else {
+          alert("🎉 All components in your folder structure tree have been completed!");
+        }
+      }
+    }
+
+    function selectTreeNodeForPrompting(nodeId) {
+      const node = systemStructureTree.find(n => n.id === nodeId);
+      if (!node) return;
+
+      if (!isNodeEligibleForGeneration(nodeId)) {
+        let parentName = "Parent Assembly";
+        if (node.parentId) {
+          const p = systemStructureTree.find(x => x.id === node.parentId);
+          if (p) parentName = p.name;
+        }
+        alert(`🔒 Top-to-Bottom Sequence Enforced:\n\nYou cannot generate prompts for "${node.name}" yet!\n\nPlease complete its parent assembly/predecessor ("${parentName}") first.`);
+        return;
+      }
+
+      currentSelectedTreeNodeId = nodeId;
+      const badge = document.getElementById('selectedNodeStatusBadge');
+
+      document.getElementById('compName').value = node.name;
+      document.getElementById('compPartNo').value = node.partNumber || '';
+      document.getElementById('compDesc').value = node.description || '';
+      document.getElementById('compIsAssembly').checked = node.isAssembly !== false;
+
+      if (badge) {
+        if (node.status === 'Completed') {
+          badge.className = 'badge badge-green';
+          badge.innerText = '🟢 Completed';
+        } else {
+          badge.className = 'badge badge-purple';
+          badge.innerText = '⚪ Focused (Ready)';
+        }
+      }
+
+      renderMainPageTreeVisualizer();
+      renderStructureTreeModalList();
+      generateAiPrompts();
+    }
+
+    // POPUP MODAL PARENT SELECTION FILTER (ONLY MARKED ASSEMBLIES ALLOWED AS PARENTS)
+    function renderStructureTreeParentSelect() {
+      const select = document.getElementById('treeNodeParentSelect');
+      if (!select) return;
+
+      const editId = document.getElementById('treeNodeEditId').value;
+      select.innerHTML = '<option value="">-- None (Top Level Root Assembly Folder) --</option>';
+
+      const assemblyNodes = systemStructureTree.filter(n => n.isAssembly && n.id !== editId);
+
+      assemblyNodes.forEach(node => {
+        const option = document.createElement('option');
+        option.value = node.id;
+        option.textContent = `📁 ${node.name} (${node.partNumber || node.id})`;
+        select.appendChild(option);
+      });
+    }
+
+    function saveTreeNodeItem() {
+      const editId = document.getElementById('treeNodeEditId').value;
+      const name = document.getElementById('treeNodeName').value.trim();
+      const partNo = document.getElementById('treeNodePartNo').value.trim();
+      const parentId = document.getElementById('treeNodeParentSelect').value || null;
+      const desc = document.getElementById('treeNodeDesc').value.trim();
+      const isAssembly = document.getElementById('treeNodeIsAssembly').checked;
+
+      if (!name) {
+        alert("Please enter a Component or Assembly Name.");
+        return;
+      }
+
+      if (editId) {
+        const node = systemStructureTree.find(n => n.id === editId);
+        if (node) {
+          node.name = name;
+          node.partNumber = partNo;
+          node.parentId = parentId;
+          node.description = desc;
+          node.isAssembly = isAssembly;
+        }
+        showToast("✏️ Updated folder tree item!", "✏️");
+      } else {
+        const newId = 'tree-node-' + Date.now().toString().slice(-6);
+        systemStructureTree.push({
+          id: newId,
+          name: name,
+          partNumber: partNo,
+          parentId: parentId,
+          description: desc,
+          isAssembly: isAssembly,
+          status: 'Not Started',
+          isExpanded: true
+        });
+        showToast("➕ Added new item to folder tree!", "➕");
+      }
+
+      clearTreeNodeForm();
+      renderMainPageTreeVisualizer();
+      renderStructureTreeParentSelect();
+      renderStructureTreeModalList();
+    }
+
+    function editTreeNodeItem(nodeId) {
+      const node = systemStructureTree.find(n => n.id === nodeId);
+      if (!node) return;
+
+      document.getElementById('treeNodeEditId').value = node.id;
+      document.getElementById('treeNodeName').value = node.name;
+      document.getElementById('treeNodePartNo').value = node.partNumber || '';
+      document.getElementById('treeNodeDesc').value = node.description || '';
+      document.getElementById('treeNodeIsAssembly').checked = node.isAssembly !== false;
+
+      renderStructureTreeParentSelect();
+      document.getElementById('treeNodeParentSelect').value = node.parentId || '';
+
+      document.getElementById('treeFormTitle').innerText = '✏️ Edit Folder Tree Item';
+      document.getElementById('btnSaveTreeNode').innerText = '💾 Save Changes';
+    }
+
+    async function deleteTreeNodeItem(nodeId) {
+      if (!nodeId) return;
+      const targetNode = systemStructureTree.find(n => n.id === nodeId);
+      if (!targetNode) {
+        showToast("Structure item not found.", "⚠️");
+        return;
+      }
+
+      const nodeName = targetNode.name || targetNode.partNo || 'Selected item';
+      const isConfirmed = await showCustomConfirm(`Are you sure you want to remove "${nodeName}" and its child elements from the structure tree?`, 'Delete Structure Node', 'warning');
+      if (!isConfirmed) return;
+
+      function getChildSubtreeIds(pId) {
+        let ids = [pId];
+        systemStructureTree.filter(n => n.parentId === pId).forEach(child => {
+          ids = ids.concat(getChildSubtreeIds(child.id));
+        });
+        return ids;
+      }
+
+      const toDeleteSet = new Set(getChildSubtreeIds(nodeId));
+      systemStructureTree = systemStructureTree.filter(n => !toDeleteSet.has(n.id));
+
+      renderMainPageTreeVisualizer();
+      renderStructureTreeParentSelect();
+      renderStructureTreeModalList();
+      showToast(`🗑️ Removed "${nodeName}" from folder tree.`, "🗑️");
+    }
+
+    async function clearAllTreeNodesConfirm() {
+      const isConfirmed = await showCustomConfirm("Are you sure you want to clear the entire structure tree?", "Clear Structure Tree", "warning");
+      if (!isConfirmed) return;
+      systemStructureTree = [];
+      renderMainPageTreeVisualizer();
+      renderStructureTreeParentSelect();
+      renderStructureTreeModalList();
+      showToast("🧹 Folder tree cleared.", "🧹");
+    }
+
+    function clearTreeNodeForm() {
+      document.getElementById('treeNodeEditId').value = '';
+      document.getElementById('treeNodeName').value = '';
+      document.getElementById('treeNodePartNo').value = '';
+      document.getElementById('treeNodeDesc').value = '';
+      document.getElementById('treeNodeIsAssembly').checked = true;
+      document.getElementById('treeFormTitle').innerText = '➕ Add Item to Folder Tree';
+      document.getElementById('btnSaveTreeNode').innerText = '➕ Save Node';
+    }
+
+    // STRUCTURE TREE IMPORT / EXPORT & SAMPLE JSON FUNCTIONS
+    function triggerImportStructureTree() {
+      const input = document.getElementById('importStructureTreeFileInput');
+      if (input) input.click();
+    }
+
+    function handleImportStructureTreeFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        try {
+          const content = evt.target.result;
+          const parsed = JSON.parse(content);
+          
+          let importedTree = [];
+          if (Array.isArray(parsed)) {
+            importedTree = parsed;
+          } else if (parsed && Array.isArray(parsed.systemStructureTree)) {
+            importedTree = parsed.systemStructureTree;
+          } else if (parsed && Array.isArray(parsed.structureTree)) {
+            importedTree = parsed.structureTree;
+          } else if (parsed && Array.isArray(parsed.tree)) {
+            importedTree = parsed.tree;
+          } else {
+            alert("❌ Invalid Structure Tree JSON format. File must contain a JSON array of tree node objects.");
+            return;
+          }
+
+          if (importedTree.length === 0) {
+            alert("⚠️ Imported JSON array is empty.");
+            return;
+          }
+
+          // Validate and sanitize nodes
+          const sanitizedNodes = importedTree.map((item, idx) => ({
+            id: String(item.id || item.structId || ('tree-import-' + Date.now() + '-' + idx)),
+            name: String(item.name || item.componentName || 'Imported Node ' + (idx + 1)),
+            partNumber: String(item.partNumber || item.partNo || ''),
+            parentId: item.parentId ? String(item.parentId) : null,
+            description: String(item.description || item.desc || ''),
+            isAssembly: item.isAssembly !== undefined ? Boolean(item.isAssembly) : true,
+            status: item.status || 'Not Started',
+            isExpanded: item.isExpanded !== undefined ? Boolean(item.isExpanded) : true
+          }));
+
+          systemStructureTree = sanitizedNodes;
+
+          renderMainPageTreeVisualizer();
+          renderStructureTreeParentSelect();
+          renderStructureTreeModalList();
+
+          if (sanitizedNodes.length > 0) {
+            selectTreeNodeForPrompting(sanitizedNodes[0].id);
+          }
+
+          showToast(`📥 Successfully imported ${sanitizedNodes.length} nodes into Structure Tree!`, "📥");
+        } catch (err) {
+          alert("❌ Failed to parse JSON file: " + err.message);
+        } finally {
+          e.target.value = '';
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    async function exportStructureTreeJSON() {
+      if (!systemStructureTree || systemStructureTree.length === 0) {
+        alert("⚠️ Structure Tree is empty. Nothing to export.");
+        return;
+      }
+
+      const jsonStr = JSON.stringify(systemStructureTree, null, 2);
+      const fileName = `Structure_Tree_${Date.now()}.json`;
+
+      if (window.electronAPI && window.electronAPI.isElectron) {
+        try {
+          const saveFn = window.electronAPI.showSaveDialog || window.electronAPI.saveDialog;
+          const saveRes = await saveFn(fileName);
+          if (saveRes && !saveRes.canceled && saveRes.filePath) {
+            await window.electronAPI.writeFile(saveRes.filePath, jsonStr);
+            showToast(`📤 Structure Tree exported to: ${saveRes.filePath}`, "📤");
+            return;
+          }
+        } catch (e) {
+          console.warn("Electron Structure Tree save fallback:", e);
+        }
+      }
+
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      showToast("📤 Structure Tree exported as JSON file!", "📤");
+    }
+
+    // PASTE JSON TO CREATE TREE JS FUNCTIONS
+    function openPasteStructureTreeJsonModal() {
+      const modal = document.getElementById('pasteStructureTreeJsonModal');
+      if (modal) {
+        modal.classList.add('active');
+        const textarea = document.getElementById('pasteTreeJsonTextArea');
+        if (textarea) {
+          if (systemStructureTree && systemStructureTree.length > 0) {
+            textarea.value = JSON.stringify(systemStructureTree, null, 2);
+          } else {
+            textarea.value = '';
+          }
+        }
+      }
+    }
+
+    function closePasteStructureTreeJsonModal() {
+      const modal = document.getElementById('pasteStructureTreeJsonModal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    function loadSampleIntoPasteTextArea() {
+      const sampleText = document.getElementById('sampleStructureTreeJsonPre').innerText;
+      const textarea = document.getElementById('pasteTreeJsonTextArea');
+      if (textarea) textarea.value = sampleText;
+      showToast("📋 Loaded sample JSON into editor!", "📋");
+    }
+
+    function parseAndApplyPastedTreeJson() {
+      const rawText = (document.getElementById('pasteTreeJsonTextArea').value || '').trim();
+      if (!rawText) {
+        alert("Please paste valid JSON text into the editor.");
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(rawText);
+        let importedTree = [];
+
+        if (Array.isArray(parsed)) {
+          importedTree = parsed;
+        } else if (parsed && Array.isArray(parsed.systemStructureTree)) {
+          importedTree = parsed.systemStructureTree;
+        } else if (parsed && Array.isArray(parsed.structureTree)) {
+          importedTree = parsed.structureTree;
+        } else if (parsed && Array.isArray(parsed.tree)) {
+          importedTree = parsed.tree;
+        } else {
+          alert("❌ Invalid Structure Tree JSON format. Input must be a JSON array of tree node objects or an object containing a tree array.");
+          return;
+        }
+
+        if (importedTree.length === 0) {
+          alert("⚠️ Pasted JSON array is empty.");
+          return;
+        }
+
+        const sanitizedNodes = importedTree.map((item, idx) => ({
+          id: String(item.id || item.structId || ('tree-paste-' + Date.now() + '-' + idx)),
+          name: String(item.name || item.componentName || 'Pasted Node ' + (idx + 1)),
+          partNumber: String(item.partNumber || item.partNo || ''),
+          parentId: item.parentId ? String(item.parentId) : null,
+          description: String(item.description || item.desc || ''),
+          isAssembly: item.isAssembly !== undefined ? Boolean(item.isAssembly) : true,
+          status: item.status || 'Not Started',
+          isExpanded: item.isExpanded !== undefined ? Boolean(item.isExpanded) : true
+        }));
+
+        systemStructureTree = sanitizedNodes;
+
+        renderMainPageTreeVisualizer();
+        renderStructureTreeParentSelect();
+        renderStructureTreeModalList();
+
+        if (sanitizedNodes.length > 0) {
+          selectTreeNodeForPrompting(sanitizedNodes[0].id);
+        }
+
+        closePasteStructureTreeJsonModal();
+        showToast(`⚡ Successfully built Structure Tree from ${sanitizedNodes.length} JSON nodes!`, "⚡");
+      } catch (err) {
+        alert("❌ Failed to parse JSON text: " + err.message);
+      }
+    }
+
+    function openStructureTreeSampleJsonModal() {
+      const modal = document.getElementById('structureTreeJsonExampleModal');
+      if (modal) modal.classList.add('active');
+    }
+
+    function closeStructureTreeSampleJsonModal() {
+      const modal = document.getElementById('structureTreeJsonExampleModal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    function copyTextToClipboard(text, successMessage, toastIcon = "📋") {
+      if (!text) {
+        showToast("⚠️ Nothing to copy!", "⚠️");
+        return;
+      }
+
+      function execCommandFallback(val) {
+        try {
+          const textArea = document.createElement("textarea");
+          textArea.value = val;
+          textArea.setAttribute("readonly", "");
+          textArea.style.position = "fixed";
+          textArea.style.top = "0";
+          textArea.style.left = "0";
+          textArea.style.width = "2em";
+          textArea.style.height = "2em";
+          textArea.style.padding = "0";
+          textArea.style.border = "none";
+          textArea.style.outline = "none";
+          textArea.style.boxShadow = "none";
+          textArea.style.background = "transparent";
+          textArea.style.opacity = "0";
+          textArea.style.zIndex = "-9999";
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          textArea.setSelectionRange(0, textArea.value.length);
+          const successful = document.execCommand('copy');
+          document.body.removeChild(textArea);
+          if (successful) {
+            showToast(successMessage, toastIcon);
+            return true;
+          }
+        } catch (e) {
+          console.warn("DOM execCommand copy failed:", e);
+        }
+        return false;
+      }
+
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        navigator.clipboard.writeText(text)
+          .then(() => {
+            showToast(successMessage, toastIcon);
+          })
+          .catch((err) => {
+            console.warn("navigator.clipboard.writeText restricted, attempting fallback:", err);
+            const ok = execCommandFallback(text);
+            if (!ok) {
+              try {
+                if (window.parent && window.parent !== window) {
+                  window.parent.postMessage({ type: 'JOST_COPY_CLIPBOARD_REQ', text: text, msg: successMessage }, '*');
+                  showToast(successMessage, toastIcon);
+                  return;
+                }
+              } catch (e) {}
+              showManualCopyPrompt(text);
+            }
+          });
+      } else {
+        const ok = execCommandFallback(text);
+        if (!ok) {
+          try {
+            if (window.parent && window.parent !== window) {
+              window.parent.postMessage({ type: 'JOST_COPY_CLIPBOARD_REQ', text: text, msg: successMessage }, '*');
+              showToast(successMessage, toastIcon);
+              return;
+            }
+          } catch (e) {}
+          showManualCopyPrompt(text);
+        }
+      }
+    }
+
+    function showManualCopyPrompt(text) {
+      let modal = document.getElementById('manualCopyModal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'manualCopyModal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;';
+        modal.innerHTML = `
+          <div style="background:#1e293b;border:1px solid #475569;border-radius:12px;padding:20px;max-width:640px;width:100%;box-shadow:0 20px 25px -5px rgba(0,0,0,0.5);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+              <h3 style="margin:0;color:#f8fafc;font-size:16px;font-weight:600;">📋 Copy Prompt</h3>
+              <button type="button" onclick="document.getElementById('manualCopyModal').style.display='none'" style="background:transparent;border:none;color:#94a3b8;font-size:20px;cursor:pointer;">&times;</button>
+            </div>
+            <p style="color:#94a3b8;font-size:13px;margin:0 0 10px 0;">Clipboard direct write was restricted by browser policy. The text below is selected—press <kbd style="background:#334155;padding:2px 6px;border-radius:4px;color:#fff;">Ctrl+C</kbd> to copy.</p>
+            <textarea id="manualCopyTextarea" readonly style="width:100%;height:220px;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:8px;padding:10px;font-family:monospace;font-size:12px;box-sizing:border-box;resize:vertical;"></textarea>
+            <div style="display:flex;justify-content:flex-end;margin-top:12px;">
+              <button type="button" onclick="document.getElementById('manualCopyModal').style.display='none'" style="background:#3b82f6;color:white;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-weight:600;">Done</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+      }
+      const ta = document.getElementById('manualCopyTextarea');
+      if (ta) {
+        ta.value = text;
+        modal.style.display = 'flex';
+        setTimeout(() => {
+          ta.focus();
+          ta.select();
+        }, 50);
+      }
+    }
+
+    function copySampleTreeJsonToClipboard() {
+      const sampleText = document.getElementById('sampleStructureTreeJsonPre').innerText;
+      copyTextToClipboard(sampleText, "📋 Copied sample JSON to clipboard!", "📋");
+    }
+
+    function downloadSampleTreeJsonFile() {
+      const sampleText = document.getElementById('sampleStructureTreeJsonPre').innerText;
+      const blob = new Blob([sampleText], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'sample_system_structure_tree.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      showToast("💾 Downloaded sample_system_structure_tree.json!", "💾");
+    }
+
+    // Generate Prompts based on Active Master Prompt & Inputs & DVP Control Reuse
+    function generateAiPrompts() {
+      const name = (document.getElementById('compName').value || 'Component').trim();
+      const partNo = (document.getElementById('compPartNo').value || 'PART-001').trim();
+      const desc = (document.getElementById('compDesc').value || '').trim();
+      
+      // Determine if target node is assembly or component
+      let isAssembly = document.getElementById('compIsAssembly') ? document.getElementById('compIsAssembly').checked : true;
+      if (currentSelectedTreeNodeId && systemStructureTree) {
+        const selNode = systemStructureTree.find(n => n.id === currentSelectedTreeNodeId);
+        if (selNode && selNode.isAssembly !== undefined) {
+          isAssembly = Boolean(selNode.isAssembly);
+        }
+      }
+      const elementTypeStr = isAssembly ? 'Assembly / Sub-System' : 'Individual Component';
+
+      // Unique Session Timestamp Prefix
+      const tsPrefix = 't' + Date.now().toString().slice(-8);
+
+      // Get Active Master System Prompt from Library
+      let activePromptObj = masterPromptLibrary.find(p => p.id === activeMasterPromptId && p.isActive !== false);
+      if (!activePromptObj) {
+        activePromptObj = masterPromptLibrary.find(p => p.isActive !== false) || masterPromptLibrary[0];
+      }
+
+      // Inject template variables into Master System Prompt view if template placeholders are used
+      let masterSystemPromptText = activePromptObj.content;
+      masterSystemPromptText = masterSystemPromptText.replace(/\{\{COMPONENT_NAME\}\}/g, name);
+      masterSystemPromptText = masterSystemPromptText.replace(/\{\{ELEMENT_TYPE\}\}/g, elementTypeStr);
+      masterSystemPromptText = masterSystemPromptText.replace(/\{\{PART_NUMBER\}\}/g, partNo);
+      masterSystemPromptText = masterSystemPromptText.replace(/\{\{DESCRIPTION\}\}/g, desc);
+      masterSystemPromptText = masterSystemPromptText.replace(/\{\{TIMESTAMP_PREFIX\}\}/g, tsPrefix);
+      masterSystemPromptText = masterSystemPromptText.replace(/\{prefix\}/g, tsPrefix);
+
+      document.getElementById('masterPromptView').innerText = masterSystemPromptText+defaultpromptrule;;
+
+      // Find parent node details if selected node has a parent
+      let parentInfoText = '';
+      if (currentSelectedTreeNodeId) {
+        const currentNode = systemStructureTree.find(n => n.id === currentSelectedTreeNodeId);
+        if (currentNode && currentNode.parentId) {
+          const parentNode = systemStructureTree.find(p => p.id === currentNode.parentId);
+          if (parentNode) {
+            parentInfoText = `\nTOP-TO-BOTTOM PARENT SYSTEM CONTEXT:\n- Parent Assembly Folder Name: "${parentNode.name}" (Part No: ${parentNode.partNumber || 'N/A'})\n- Parent Description: "${parentNode.description || ''}"\n`;
+          }
+        }
+      }
+
+      // Build User Prompt
+      let userPrompt = `USER INPUT DATA:\n`;
+      userPrompt += `- Component/Assembly Name: ${name}\n`;
+      userPrompt += `- Type (Assembly or Component): ${elementTypeStr}\n`;
+      userPrompt += `- Part Number: ${partNo}\n`;
+      userPrompt += `- Component Description: ${desc}\n`;
+      userPrompt += `- Session Timestamp ID Prefix: ${tsPrefix}\n`;
+      userPrompt += parentInfoText;
+
+      // Combine Predefined Controls + Ingested Master Controls for Cross-Component DVP REUSE
+      const masterControlsCombined = [];
+
+      // 1. Predefined DVP Controls
+      predefinedControlsList.forEach(c => {
+        masterControlsCombined.push({
+          id: c.sysId,
+          userRefId: c.userRefId || c.sysId,
+          type: c.type,
+          desc: c.desc
+        });
+      });
+
+      // 2. Ingested Master Controls in State
+      (fmeaPackageState.libraries.controls || []).forEach(c => {
+        if (!masterControlsCombined.some(existing => existing.id === c.id || existing.desc.trim().toLowerCase() === c.desc.trim().toLowerCase())) {
+          masterControlsCombined.push({
+            id: c.id,
+            userRefId: c.id,
+            type: c.type || 'Detection',
+            desc: c.desc
+          });
+        }
+      });
+
+      if (masterControlsCombined.length > 0) {
+        userPrompt += `\n🚨 INHERITED MASTER DVP CONTROLS LIBRARY FOR CROSS-COMPONENT REUSE & LINKING:\n`;
+        masterControlsCombined.forEach(ctrl => {
+          userPrompt += `- EXACT DVP ID: "${ctrl.id}" | User DVP Ref: "${ctrl.userRefId}" | Type: "${ctrl.type}" | Description: "${ctrl.desc}"\n`;
+        });
+
+        userPrompt += `\nEXPLICIT DVP CONTROL REUSE INSTRUCTIONS:\n`;
+        userPrompt += `1. Review the INHERITED MASTER DVP CONTROLS LIBRARY above. If an existing control applies to a cause of this component, REUSE ITS EXACT DVP ID in "causeControls" array without creating a duplicate control in "libraries.controls".\n`;
+        if (predefinedControlsMode) {
+          userPrompt += `2. STRICT MODE ACTIVE: You MUST select controls strictly from the library above!\n`;
+        } else {
+          userPrompt += `2. If creating a NEW control, construct ID prefix: "ctrl-prev-${tsPrefix}-01" (Prevention) or "ctrl-det-${tsPrefix}-01" (Detection).\n`;
+        }
+      }
+
+      // Check if existing effects exist in package state to append REUSE BLOCK
+      const existingEffects = fmeaPackageState.libraries.effects || [];
+      const syncCountText = document.getElementById('syncEffectCountText');
+      
+      if (existingEffects.length > 0 || masterControlsCombined.length > 0) {
+        if (syncCountText) {
+          syncCountText.innerHTML = `<strong>${existingEffects.length} synchronized effects</strong> & <strong>${masterControlsCombined.length} DVP controls</strong> ready for cross-linking.<br>Current Session Prefix: <code>${tsPrefix}</code>.`;
+        }
+
+        userPrompt += `\n🚨 INHERITED MASTER EFFECTS LIBRARY FOR CROSS-COMPONENT LINKING:\n`;
+        existingEffects.forEach(eff => {
+          userPrompt += `- EXACT TIMESTAMP ID: "${eff.id}" | Category: "${eff.category || 'Effect'}" | Severity: ${eff.severity || 8} | Description: "${eff.desc}"\n`;
+        });
+        
+        userPrompt += `\nEXPLICIT TIMESTAMP ID REUSE INSTRUCTIONS FOR EFFECTS:\n`;
+        userPrompt += `1. If an existing effect fits a failure mode of this component, reference its EXACT TIMESTAMP ID above in failureModeEffects without creating a new effect in libraries.effects.\n`;
+        userPrompt += `2. If generating a NEW effect, construct ID with prefix: End User -> "eff-eu-${tsPrefix}-01", OEM Plant -> "eff-oem-${tsPrefix}-01", Component Plant -> "eff-plant-${tsPrefix}-01".\n`;
+
+      } else {
+        if (syncCountText) syncCountText.innerHTML = `0 existing effects. Initial component will seed the master effects library using Session Timestamp Prefix: <code>${tsPrefix}</code>.`;
+      }
+
+      userPrompt += `\nINSTRUCTIONS:\nGenerate complete FMEA subpackage JSON matching the JOST_FMEA_SUBFILE_PKG_V1 schema using timestamp prefix "${tsPrefix}" for all new item IDs. Output strictly raw JSON without markdown text outside.`;
+
+      document.getElementById('userPromptView').innerText = userPrompt;
+      showToast("⏱️ Prompts generated with Active Master System Prompt!", "⏱️");
+    }
+
+    function copyMasterPrompt() {
+      const text = document.getElementById('masterPromptView').innerText;
+      copyTextToClipboard(text, "📋 Master System Prompt copied to clipboard!", "📋");
+    }
+
+    function copyUserPrompt() {
+      const text = document.getElementById('userPromptView').innerText;
+      copyTextToClipboard(text, "📋 User Prompt with Timestamp Unique IDs copied!", "📋");
+    }
+
+    // Step 3: Ingest AI JSON Response & Auto-Advance to Next Eligible Item
+    function ingestAiJsonResponse() {
+      const rawText = document.getElementById('aiJsonResponse').value.trim();
+      if (!rawText) {
+        alert("Please paste the AI's JSON output into the text box first.");
+        return;
+      }
+
+      let cleanJson = rawText;
+      const jsonMatch = cleanJson.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) cleanJson = jsonMatch[1].trim();
+
+      let parsedPayload = null;
+      try {
+        parsedPayload = JSON.parse(cleanJson);
+      } catch (err) {
+        alert("Failed to parse JSON. Please ensure you copied the entire JSON payload starting with { and ending with }.\n\nError: " + err.message);
+        return;
+      }
+
+      if (!parsedPayload || (!parsedPayload.structure && !parsedPayload.functionLines)) {
+        alert("Invalid FMEA payload. Expected JSON containing 'structure' or 'functionLines'.");
+        return;
+      }
+
+      // Mark matching structure tree node as Completed 🟢
+      let matchedNode = null;
+      if (currentSelectedTreeNodeId) {
+        matchedNode = systemStructureTree.find(n => n.id === currentSelectedTreeNodeId);
+      }
+
+      if (!matchedNode && parsedPayload.structure && parsedPayload.structure[0]) {
+        const payloadNode = parsedPayload.structure[0];
+        const ingestedId = (payloadNode.id || '').trim();
+        const ingestedName = (payloadNode.name || '').trim().toLowerCase();
+        const ingestedPartNo = (payloadNode.partNumber || '').trim().toLowerCase();
+
+        matchedNode = systemStructureTree.find(n => 
+          (ingestedId && n.id === ingestedId) ||
+          (ingestedName && n.name.trim().toLowerCase() === ingestedName) ||
+          (ingestedPartNo && n.partNumber && n.partNumber.trim().toLowerCase() === ingestedPartNo)
+        );
+      }
+
+      // Robust Fallback: If still no matched node, mark the active uncompleted node as Completed
+      if (!matchedNode) {
+        const flatList = getFlatTopToBottomSequence();
+        matchedNode = flatList.find(n => n.status !== 'Completed' && isNodeEligibleForGeneration(n.id));
+      }
+
+      if (matchedNode) {
+        matchedNode.status = 'Completed';
+      }
+
+      // Merge into Cumulative Package State
+      mergeIntoPackageState(parsedPayload);
+
+      // Reset Step 3 text area
+      document.getElementById('aiJsonResponse').value = '';
+      
+      // Auto-advance to next eligible component in strict folder tree order!
+      const flatList = getFlatTopToBottomSequence();
+      const nextEligibleNode = flatList.find(n => n.status !== 'Completed' && isNodeEligibleForGeneration(n.id));
+
+      renderMainPageTreeVisualizer();
+      renderStructureTreeModalList();
+      renderPackageInventoryTable();
+      renderEffectsLibraryTable();
+
+      if (nextEligibleNode) {
+        selectTreeNodeForPrompting(nextEligibleNode.id);
+        showToast(`🎉 Ingested! Auto-focused next eligible component: "${nextEligibleNode.name}"`, "🎉");
+      } else {
+        showToast("🎉 All components in folder tree are completed 🟢!", "🎉");
+      }
+    }
+
+    function clearJsonResponseInput() {
+      document.getElementById('aiJsonResponse').value = '';
+    }
+
+    // Merge Function for Subpackage payloads with Smart Effect & DVP Control Deduplication & ID Remap
+    function mergeIntoPackageState(pkg) {
+      // 1. Structure
+      (pkg.structure || []).forEach(node => {
+        if (!fmeaPackageState.structure.some(s => s.id === node.id)) {
+          fmeaPackageState.structure.push(node);
+        }
+      });
+
+      // 2. Functions & Requirements
+      (pkg.functions || []).forEach(fn => {
+        if (!fmeaPackageState.functions.some(existing => existing.id === fn.id)) {
+          fmeaPackageState.functions.push(fn);
+        }
+      });
+
+      (pkg.requirements || []).forEach(rq => {
+        if (!fmeaPackageState.requirements.some(existing => existing.id === rq.id)) {
+          fmeaPackageState.requirements.push(rq);
+        }
+      });
+
+      // 3. Function Lines
+      (pkg.functionLines || []).forEach(fl => {
+        if (!fmeaPackageState.functionLines.some(existing => existing.id === fl.id)) {
+          fmeaPackageState.functionLines.push(fl);
+        }
+      });
+
+      // 4. Smart Effect Deduplication & Mapping Remap
+      const effectIdRemap = {};
+
+      if (pkg.libraries && pkg.libraries.effects) {
+        pkg.libraries.effects.forEach(newEff => {
+          const existingMatch = fmeaPackageState.libraries.effects.find(e => 
+            e.id === newEff.id || 
+            (e.desc && newEff.desc && e.desc.trim().toLowerCase() === newEff.desc.trim().toLowerCase())
+          );
+
+          if (existingMatch) {
+            effectIdRemap[newEff.id] = existingMatch.id;
+          } else {
+            fmeaPackageState.libraries.effects.push(newEff);
+          }
+        });
+      }
+
+      // 5. Causes & DVP Control Deduplication & Mapping Remap
+      const controlIdRemap = {};
+
+      if (pkg.libraries) {
+        (pkg.libraries.causes || []).forEach(cause => {
+          if (!fmeaPackageState.libraries.causes.some(c => c.id === cause.id || c.details === cause.details)) {
+            fmeaPackageState.libraries.causes.push(cause);
+          }
+        });
+
+        (pkg.libraries.controls || []).forEach(newCtrl => {
+          const predefinedMatch = predefinedControlsList.find(p => p.sysId === newCtrl.id || p.desc.trim().toLowerCase() === newCtrl.desc.trim().toLowerCase());
+          const existingMatch = fmeaPackageState.libraries.controls.find(c => c.id === newCtrl.id || c.desc.trim().toLowerCase() === newCtrl.desc.trim().toLowerCase());
+
+          if (predefinedMatch) {
+            controlIdRemap[newCtrl.id] = predefinedMatch.sysId;
+          } else if (existingMatch) {
+            controlIdRemap[newCtrl.id] = existingMatch.id;
+          } else {
+            fmeaPackageState.libraries.controls.push(newCtrl);
+          }
+        });
+      }
+
+      // 6. Mappings with Remapped Synchronized Effects & DVP Controls
+      if (pkg.failureModeEffects) {
+        Object.keys(pkg.failureModeEffects).forEach(fmId => {
+          const rawEffList = pkg.failureModeEffects[fmId] || [];
+          const remappedEffList = rawEffList.map(effId => effectIdRemap[effId] || effId);
+          fmeaPackageState.failureModeEffects[fmId] = remappedEffList;
+        });
+      }
+
+      if (pkg.failureModeCauses) Object.assign(fmeaPackageState.failureModeCauses, pkg.failureModeCauses);
+
+      if (pkg.causeControls) {
+        Object.keys(pkg.causeControls).forEach(causeId => {
+          const rawCtrlList = pkg.causeControls[causeId] || [];
+          const remappedCtrlList = rawCtrlList.map(ctrlId => controlIdRemap[ctrlId] || ctrlId);
+          fmeaPackageState.causeControls[causeId] = remappedCtrlList;
+        });
+      }
+    }
+
+    // Render Package Inventory Table
+    function renderPackageInventoryTable() {
+      const tbody = document.getElementById('packageInventoryTableBody');
+      const countSpan = document.getElementById('pkgCompCount');
+      
+      const nodes = fmeaPackageState.structure || [];
+      if (countSpan) countSpan.innerText = nodes.length;
+
+      if (nodes.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="4" style="text-align:center; padding: 16px; color: var(--text-muted);">
+              📭 Package is currently empty.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = nodes.map(node => {
+        const flCount = fmeaPackageState.functionLines.filter(fl => fl.structId === node.id).length;
+
+        return `
+          <tr>
+            <td>
+              <strong style="color: #fff;">${escapeHtml(node.name)}</strong>
+              <div style="font-size:9.5px; color: var(--text-muted);">${escapeHtml(node.partNumber || node.id)}</div>
+            </td>
+            <td><span class="badge badge-blue">${escapeHtml(node.type || 'Sub-System')}</span></td>
+            <td><span class="badge badge-green">${flCount} Failures</span></td>
+            <td>
+              <button class="btn btn-secondary btn-sm" onclick="removeComponentFromPackage('${node.id}')" title="Remove">🗑️</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Render Synchronized Effects Table
+    function renderEffectsLibraryTable() {
+      const tbody = document.getElementById('effectsLibraryTableBody');
+      const countSpan = document.getElementById('pkgEffectCount');
+      const effects = fmeaPackageState.libraries.effects || [];
+
+      if (countSpan) countSpan.innerText = effects.length;
+
+      if (effects.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="4" style="text-align:center; padding: 12px; color: var(--text-muted);">
+              No synchronized effects yet.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = effects.map(eff => {
+        let badgeClass = 'badge-purple';
+        if (eff.category === 'End User Level') badgeClass = 'badge-blue';
+        if (eff.category === 'OEM Assembly Plant Level') badgeClass = 'badge-amber';
+        if (eff.category === 'Component Plant Level') badgeClass = 'badge-green';
+
+        return `
+          <tr>
+            <td><code style="color:#38bdf8; font-size:10px; font-weight:bold;">${escapeHtml(eff.id)}</code></td>
+            <td><span class="badge ${badgeClass}">${escapeHtml(eff.category || 'Effect')}</span></td>
+            <td><strong style="color: ${eff.severity >= 9 ? '#ef4444' : '#f59e0b'};">${eff.severity || 8}</strong></td>
+            <td style="font-size:11px; color:#cbd5e1;">${escapeHtml(eff.desc)}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function removeComponentFromPackage(structId) {
+      const isConfirmed = await showCustomConfirm("Are you sure you want to remove this component from the package?", "Remove Component", "warning");
+      if (!isConfirmed) return;
+      
+      fmeaPackageState.structure = fmeaPackageState.structure.filter(s => s.id !== structId);
+      fmeaPackageState.functions = fmeaPackageState.functions.filter(f => f.structId !== structId);
+      fmeaPackageState.requirements = fmeaPackageState.requirements.filter(r => r.structId !== structId);
+      
+      const flToRemove = fmeaPackageState.functionLines.filter(fl => fl.structId === structId).map(fl => fl.id);
+      fmeaPackageState.functionLines = fmeaPackageState.functionLines.filter(fl => fl.structId !== structId);
+
+      flToRemove.forEach(flId => {
+        delete fmeaPackageState.failureModeEffects[flId];
+        delete fmeaPackageState.failureModeCauses[flId];
+      });
+
+      renderPackageInventoryTable();
+      renderEffectsLibraryTable();
+      generateAiPrompts();
+      showToast("🗑️ Component removed from package inventory.", "ℹ️");
+    }
+
+    // Helper to convert flat structure nodes array to nested tree object for Main App compatibility
+    function convertFlatTreeToNestedObject(nodes) {
+      if (!nodes || nodes.length === 0) return null;
+
+      const map = {};
+      const normalizedNodes = nodes.map((n, idx) => {
+        const nodeId = String(n.id || n.structId || ('struct-' + idx));
+        const parentId = n.parentId ? String(n.parentId) : null;
+        const typeStr = n.isAssembly ? (idx === 0 ? 'System' : 'Sub-System') : (n.type || 'Component');
+
+        const nodeObj = {
+          id: nodeId,
+          parentId: parentId,
+          name: String(n.name || n.componentName || 'Component ' + (idx + 1)),
+          partNo: String(n.partNo || n.partNumber || n.partCode || 'PART-001'),
+          partNumber: String(n.partNumber || n.partNo || n.partCode || 'PART-001'),
+          type: typeStr,
+          description: String(n.description || n.desc || ''),
+          children: []
+        };
+        map[nodeId] = nodeObj;
+        return nodeObj;
+      });
+
+      let currentSubAssemblyId = null;
+      const topRootId = normalizedNodes[0].id;
+
+      normalizedNodes.forEach((node, idx) => {
+        if (idx === 0) return;
+        if (!node.parentId) {
+          if (node.type === 'Component' && currentSubAssemblyId) {
+            node.parentId = currentSubAssemblyId;
+          } else {
+            node.parentId = topRootId;
+          }
+        }
+        if (node.type === 'Sub-System' || node.type === 'Assembly' || node.type === 'System') {
+          currentSubAssemblyId = node.id;
+        }
+      });
+
+      const roots = [];
+      normalizedNodes.forEach(node => {
+        if (node.parentId && map[node.parentId] && node.parentId !== node.id) {
+          map[node.parentId].children.push(node);
+        } else {
+          roots.push(node);
+        }
+      });
+
+      if (roots.length === 1) {
+        return roots[0];
+      } else if (roots.length > 1) {
+        return {
+          id: 'root-system-assembly',
+          name: (roots[0].name || 'System') + ' Assembly',
+          partNo: roots[0].partNo || 'SYS-MASTER',
+          type: 'System',
+          children: roots
+        };
+      }
+      return null;
+    }
+
+    // Export Final JSON File for Main Application & Workstation
+    async function exportFinalFmeaPackageJSON() {
+      if ((fmeaPackageState.structure || []).length === 0) {
+        alert("Your FMEA package is currently empty! Please complete Steps 1-3 to add at least one component before exporting.");
+        return;
+      }
+
+      const mainProjectName = fmeaPackageState.structure[0] ? fmeaPackageState.structure[0].name : "JOST DFMEA Project";
+      const nestedStructure = convertFlatTreeToNestedObject(fmeaPackageState.structure);
+
+      // Normalize functionLines & build functionRequirements map for complete application compatibility
+      const functionRequirements = {};
+      const normalizedFunctionLines = (fmeaPackageState.functionLines || []).map(fl => {
+        const reqId = fl.requirementId;
+        if (reqId) {
+          functionRequirements[fl.id] = functionRequirements[fl.id] || [];
+          if (!functionRequirements[fl.id].includes(reqId)) {
+            functionRequirements[fl.id].push(reqId);
+          }
+        }
+
+        const failureModes = fl.failureModes && fl.failureModes.length > 0 ? fl.failureModes : [
+          {
+            id: fl.failureModeId || ('fm-' + fl.id),
+            name: fl.failureModeName || 'Failure Mode',
+            severity: fl.severity || 5,
+            occurrence: fl.occurrence || 3,
+            detection: fl.detection || 2,
+            rpn: fl.rpn || 30,
+            ap: fl.ap || 'M'
+          }
+        ];
+
+        return {
+          ...fl,
+          failureModes: failureModes
+        };
+      });
+
+      const exportPayload = {
+        magic: "JOST_AI_WORKSTATION_EXPORT_V1",
+        exportedAt: new Date().toISOString(),
+        projectInfo: {
+          name: mainProjectName,
+          fmeaCode: `DFMEA-${Date.now().toString().slice(-6)}`,
+          subject: "Automotive Systems Reliability & DFMEA Analysis",
+          creatorName: "JOST AI FMEA Generator",
+          author: "JOST AI FMEA Generator",
+          date: new Date().toISOString().slice(0, 10)
+        },
+        revisions: [
+          {
+            revision: "01",
+            status: "Active",
+            accessMode: "READ_WRITE",
+            date: new Date().toISOString().slice(0, 10),
+            description: "AIAG-VDA 7-Step DFMEA Generated Subpackage"
+          }
+        ],
+        activeFmeaType: "DFMEA",
+        accessMode: "READ_WRITE",
+        status: "In Progress",
+        currentRevision: "01",
+
+        // Tree representations for both nested and flat readers
+        structure: nestedStructure,
+        structureTree: fmeaPackageState.structure.map(s => ({
+          ...s,
+          partNo: s.partNo || s.partNumber || 'PART-001'
+        })),
+
+        functions: fmeaPackageState.functions || [],
+        requirements: fmeaPackageState.requirements || [],
+        functionLines: normalizedFunctionLines,
+        functionRequirements: functionRequirements,
+
+        libraries: {
+          mainEffectFunctions: [],
+          effects: fmeaPackageState.libraries.effects || [],
+          causes: fmeaPackageState.libraries.causes || [],
+          controls: fmeaPackageState.libraries.controls || [],
+          actions: []
+        },
+
+        failureModeEffects: fmeaPackageState.failureModeEffects || {},
+        failureModeCauses: fmeaPackageState.failureModeCauses || {},
+        causeControls: fmeaPackageState.causeControls || {},
+        causeActions: fmeaPackageState.causeActions || {},
+
+        pfmeas: []
+      };
+
+      const jsonStr = JSON.stringify(exportPayload, null, 2);
+      const fileName = `JOST_FMEA_Package_${mainProjectName.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().slice(0,10)}.json`;
+
+      if (window.electronAPI && window.electronAPI.isElectron) {
+        try {
+          const saveFn = window.electronAPI.showSaveDialog || window.electronAPI.saveDialog;
+          const saveRes = await saveFn(fileName);
+          if (saveRes && !saveRes.canceled && saveRes.filePath) {
+            await window.electronAPI.writeFile(saveRes.filePath, jsonStr);
+            showToast(`💾 Exported FMEA package to: ${saveRes.filePath}`, "💾");
+            return;
+          }
+        } catch (e) {
+          console.warn("Electron FMEA package save fallback:", e);
+        }
+      }
+
+      const blob = new Blob([jsonStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      showToast("💾 Exported complete FMEA package JSON file!", "💾");
+    }
+
+    async function resetWorkstationSession() {
+      const isConfirmed = await showCustomConfirm("Are you sure you want to reset your session and clear all accumulated package data?", "Reset Session", "warning");
+      if (!isConfirmed) return;
+      
+      // Clear package data
+      fmeaPackageState.structure = [];
+      fmeaPackageState.functions = [];
+      fmeaPackageState.requirements = [];
+      fmeaPackageState.functionLines = [];
+      fmeaPackageState.libraries = { effects: [], causes: [], controls: [] };
+      fmeaPackageState.failureModeEffects = {};
+      fmeaPackageState.failureModeCauses = {};
+      fmeaPackageState.causeControls = {};
+
+      // Reset all structure tree item statuses back to Not Started
+      systemStructureTree.forEach(node => {
+        node.status = 'Not Started';
+      });
+
+      currentSelectedTreeNodeId = null;
+
+      renderMainPageTreeVisualizer();
+      renderStructureTreeModalList();
+      renderPackageInventoryTable();
+      renderEffectsLibraryTable();
+      generateAiPrompts();
+      
+      showToast("🔄 Session & folder statuses reset.", "🔄");
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function showToast(msg, icon = '✨') {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      const toastIcon = document.getElementById('toastIcon');
+      if (toastMsg) toastMsg.innerText = msg;
+      if (toastIcon) toastIcon.innerText = icon;
+      toast.classList.add('show');
+      setTimeout(() => { toast.classList.remove('show'); }, 3000);
+    }
+
+    function closeEmbeddedWindow() {
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'JOST_PFMEA_CLOSE_WORKSTATION' }, '*');
+          return;
+        }
+      } catch (e) {}
+      try {
+        if (window.opener) {
+          window.close();
+          return;
+        }
+      } catch (e) {}
+      try {
+        window.close();
+      } catch (e) {}
+    }
+  </script>
+</body>
+</html>

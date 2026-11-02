@@ -1376,6 +1376,7 @@ function renderCustomAlert(alertData) {
   if (isPrompt) {
     if (inputContainer) inputContainer.style.display = 'block';
     if (inputEl) {
+      inputEl.type = (type === 'password') ? 'password' : 'text';
       inputEl.value = defaultValue || '';
     }
     if (cancelBtn) cancelBtn.style.display = 'inline-block';
@@ -1407,6 +1408,7 @@ function closeCustomAlert(confirmed) {
   if (overlay) overlay.style.display = 'none';
 
   const inputEl = document.getElementById('customAlertInput');
+  if (inputEl) inputEl.type = 'text';
   const curData = activeCustomAlertData;
   const res = activeCustomAlertResolver;
 
@@ -28566,6 +28568,8 @@ function switchRevisionTab(tabName) {
     if (tabBtnMeet) tabBtnMeet.classList.add('active');
     if (contentRev) contentRev.style.display = 'none';
     if (contentMeet) contentMeet.style.display = 'flex';
+    if (typeof initMeetingFormDefaults === 'function') initMeetingFormDefaults();
+    if (typeof renderMeetingRecordsList === 'function') renderMeetingRecordsList(document.getElementById('meetingRecordsList'));
   }
 }
 window.switchRevisionTab = switchRevisionTab;
@@ -28591,6 +28595,7 @@ function openRevisionModal() {
     creatorEl.style.opacity = '0.85';
   }
   renderRevisionStatusUI();
+  if (typeof initMeetingFormDefaults === 'function') initMeetingFormDefaults();
   renderMeetingRecordsList(document.getElementById('meetingRecordsList'));
   switchRevisionTab('revisions');
   openModal('revisionModal');
@@ -32967,70 +32972,1108 @@ function printRevisionChangeReport() {
 // ----------------------------------------------------
 // Meeting Management Functions
 // ----------------------------------------------------
-function addMeetingRecord(e) {
-  e.preventDefault();
-  const title = document.getElementById('meetTitle').value.trim();
-  const attendees = document.getElementById('meetAttendees').value.trim();
-  const notes = document.getElementById('meetNotes').value.trim();
+
+function toLocalISOString(d) {
+  if (!d || isNaN(d.getTime())) d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const year = d.getFullYear();
+  const month = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+window.toLocalISOString = toLocalISOString;
+
+function getProjectLibraryMembers() {
+  const members = new Map();
+
+  // 1. Central User Library (systemUsers)
+  if (typeof systemUsers !== 'undefined' && Array.isArray(systemUsers)) {
+    systemUsers.forEach(u => {
+      if (u && u.name) {
+        const cleanName = u.name.trim();
+        if (cleanName && !members.has(cleanName)) {
+          members.set(cleanName, {
+            name: cleanName,
+            role: u.role || 'Member',
+            department: u.department || 'Jost'
+          });
+        }
+      }
+    });
+  }
+
+  // 2. 5T Team members from active project variants
+  if (typeof fmeaData !== 'undefined' && fmeaData && Array.isArray(fmeaData.variants)) {
+    fmeaData.variants.forEach(v => {
+      if (v && v.fiveT && Array.isArray(v.fiveT.teamMembers)) {
+        v.fiveT.teamMembers.forEach(tm => {
+          if (tm && tm.name) {
+            const cleanName = tm.name.trim();
+            if (cleanName && !members.has(cleanName)) {
+              members.set(cleanName, {
+                name: cleanName,
+                role: tm.role || 'CFT Member',
+                department: tm.department || 'CFT'
+              });
+            }
+          }
+        });
+      }
+    });
+  }
+
+  // 3. Project author / creator
+  if (typeof fmeaData !== 'undefined' && fmeaData) {
+    const creator = fmeaData.createdBy || fmeaData.projectInfo?.creatorName || fmeaData.projectInfo?.author;
+    if (creator && typeof creator === 'string') {
+      const cleanName = creator.trim();
+      if (cleanName && !members.has(cleanName)) {
+        members.set(cleanName, {
+          name: cleanName,
+          role: 'Project Creator',
+          department: ''
+        });
+      }
+    }
+  }
+
+  return Array.from(members.values());
+}
+window.getProjectLibraryMembers = getProjectLibraryMembers;
+
+let activeMeetingAttendees = { create: [], edit: [] };
+let activeAttendeePickerContext = 'create';
+
+function renderMeetingAttendeesTags(context = 'create') {
+  const containerId = (context === 'edit') ? 'editMeetAttendeesList' : 'meetAttendeesList';
+  const inputId = (context === 'edit') ? 'editMeetAttendees' : 'meetAttendees';
+  const container = document.getElementById(containerId);
+  const hiddenInput = document.getElementById(inputId);
+
+  const list = activeMeetingAttendees[context] || [];
+  if (hiddenInput) {
+    hiddenInput.value = list.join(', ');
+  }
+
+  if (!container) return;
+
+  if (list.length === 0) {
+    container.innerHTML = `<span style="color:var(--text-muted, #94a3b8); font-size:11.5px; font-style:italic;">No attendees added yet. Click "+ Add Attendees" above to pick from directory.</span>`;
+    return;
+  }
+
+  container.innerHTML = list.map(name => `
+    <div style="background:rgba(2, 132, 199, 0.22); border:1px solid #0284c7; color:#f8fafc; padding:3px 9px; border-radius:14px; font-size:11.5px; display:inline-flex; align-items:center; gap:6px;">
+      <span>👤 ${escapeHtml(name)}</span>
+      <span onclick="removeAttendeeFromMeeting('${escapeHtml(name).replace(/'/g, "\\'")}', '${context}')"
+        title="Remove attendee from this meeting"
+        style="cursor:pointer; color:#ef4444; font-weight:bold; font-size:13px; line-height:1; padding:0 2px; transition:color 0.15s ease;"
+        onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='#ef4444'">&times;</span>
+    </div>
+  `).join('');
+}
+window.renderMeetingAttendeesTags = renderMeetingAttendeesTags;
+
+function removeAttendeeFromMeeting(name, context = 'create') {
+  if (!name) return;
+  activeMeetingAttendees[context] = (activeMeetingAttendees[context] || []).filter(
+    item => item.toLowerCase() !== name.toLowerCase()
+  );
+  renderMeetingAttendeesTags(context);
+  // Refresh modal list if open
+  const modal = document.getElementById('attendeeSearchModal');
+  if (modal && modal.style.display !== 'none' && activeAttendeePickerContext === context) {
+    renderAttendeeSearchModalList(document.getElementById('attendeeModalSearchInput')?.value || '');
+  }
+}
+window.removeAttendeeFromMeeting = removeAttendeeFromMeeting;
+
+function addAttendeeToMeeting(name, context = 'create') {
+  if (!name) return;
+  const cleanName = name.trim();
+  if (!cleanName) return;
+  activeMeetingAttendees[context] = activeMeetingAttendees[context] || [];
+  if (!activeMeetingAttendees[context].some(item => item.toLowerCase() === cleanName.toLowerCase())) {
+    activeMeetingAttendees[context].push(cleanName);
+  }
+  renderMeetingAttendeesTags(context);
+}
+window.addAttendeeToMeeting = addAttendeeToMeeting;
+
+function addCustomAttendee(context = 'create') {
+  const inputId = (context === 'edit') ? 'customAttendeeInput_edit' : 'customAttendeeInput_create';
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const val = input.value.trim();
+  if (val) {
+    addAttendeeToMeeting(val, context);
+    input.value = '';
+  }
+}
+window.addCustomAttendee = addCustomAttendee;
+
+function openAttendeeSearchModal(context = 'create') {
+  activeAttendeePickerContext = context;
+  const searchInput = document.getElementById('attendeeModalSearchInput');
+  if (searchInput) searchInput.value = '';
+  renderAttendeeSearchModalList('');
+  openModal('attendeeSearchModal');
+  setTimeout(() => {
+    if (searchInput) {
+      searchInput.focus();
+      searchInput.select();
+    }
+  }, 80);
+}
+window.openAttendeeSearchModal = openAttendeeSearchModal;
+
+function filterAttendeeSearchModal(val) {
+  renderAttendeeSearchModalList(val || '');
+}
+window.filterAttendeeSearchModal = filterAttendeeSearchModal;
+
+function renderAttendeeSearchModalList(searchTerm = '') {
+  const container = document.getElementById('attendeeModalUserList');
+  const countBadge = document.getElementById('attendeeModalCountBadge');
+  const summaryEl = document.getElementById('attendeeModalSelectedSummary');
+  if (!container) return;
+
+  const allMembers = getProjectLibraryMembers();
+  const q = (searchTerm || '').trim().toLowerCase();
+
+  const filtered = q
+    ? allMembers.filter(m =>
+        (m.name && m.name.toLowerCase().includes(q)) ||
+        (m.role && m.role.toLowerCase().includes(q)) ||
+        (m.department && m.department.toLowerCase().includes(q))
+      )
+    : allMembers;
+
+  if (countBadge) {
+    countBadge.textContent = `${filtered.length} matching member${filtered.length === 1 ? '' : 's'}`;
+  }
+
+  const currentList = activeMeetingAttendees[activeAttendeePickerContext] || [];
+  if (summaryEl) {
+    summaryEl.textContent = `${currentList.length} attendee${currentList.length === 1 ? '' : 's'} in meeting`;
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div style="text-align:center; padding:30px 10px; color:var(--text-muted, #94a3b8); font-size:12px;">
+        No matching users found for "${escapeHtml(searchTerm)}".
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map(m => {
+    const isAdded = currentList.some(item => item.toLowerCase() === m.name.toLowerCase());
+    return `
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:var(--bg-card, #1e293b); border:1px solid ${isAdded ? '#0284c7' : 'var(--border-color, #334155)'}; border-radius:6px; transition:border-color 0.15s ease;">
+        <div style="flex:1; padding-right:10px;">
+          <div style="font-weight:600; font-size:12.5px; color:var(--text-primary, #f8fafc); display:flex; align-items:center; gap:6px;">
+            <span>👤</span>
+            <span>${escapeHtml(m.name)}</span>
+            ${isAdded ? `<span style="font-size:10px; background:rgba(34, 197, 94, 0.2); color:#22c55e; border:1px solid #22c55e; padding:1px 6px; border-radius:10px; font-weight:700;">In Meeting</span>` : ''}
+          </div>
+          <div style="font-size:11px; color:var(--text-muted, #94a3b8); margin-top:2px;">
+            ${escapeHtml(m.role || 'Member')}${m.department ? ` • ${escapeHtml(m.department)}` : ''}
+          </div>
+        </div>
+        <div>
+          ${isAdded ? `
+            <button type="button" onclick="toggleAttendeeFromModal('${escapeHtml(m.name).replace(/'/g, "\\'")}')"
+              style="background:rgba(239, 68, 68, 0.15); border:1px solid #ef4444; color:#ef4444; font-size:11px; padding:4px 10px; border-radius:4px; cursor:pointer; display:flex; align-items:center; gap:4px; font-weight:600;"
+              title="Remove attendee from this meeting">
+              <span>✕</span> Remove
+            </button>
+          ` : `
+            <button type="button" onclick="toggleAttendeeFromModal('${escapeHtml(m.name).replace(/'/g, "\\'")}')"
+              style="background:#0284c7; border:none; color:#fff; font-size:11px; padding:4px 12px; border-radius:4px; cursor:pointer; display:flex; align-items:center; gap:4px; font-weight:600;"
+              title="Add attendee to this meeting">
+              <span>+</span> Add
+            </button>
+          `}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+window.renderAttendeeSearchModalList = renderAttendeeSearchModalList;
+
+function toggleAttendeeFromModal(name) {
+  if (!name) return;
+  const currentList = activeMeetingAttendees[activeAttendeePickerContext] || [];
+  const idx = currentList.findIndex(item => item.toLowerCase() === name.toLowerCase());
+  if (idx >= 0) {
+    currentList.splice(idx, 1);
+  } else {
+    currentList.push(name);
+  }
+  activeMeetingAttendees[activeAttendeePickerContext] = currentList;
+  renderMeetingAttendeesTags(activeAttendeePickerContext);
+  renderAttendeeSearchModalList(document.getElementById('attendeeModalSearchInput')?.value || '');
+}
+window.toggleAttendeeFromModal = toggleAttendeeFromModal;
+
+function initMeetingFormDefaults() {
+  const dtInput = document.getElementById('meetDateTime');
+  if (dtInput && !dtInput.value) {
+    dtInput.value = toLocalISOString(new Date());
+  }
+  const hoursInput = document.getElementById('meetHours');
+  if (hoursInput && (!hoursInput.value || parseFloat(hoursInput.value) <= 0)) {
+    hoursInput.value = '1.0';
+  }
+  renderMeetingAttendeesTags('create');
+}
+window.initMeetingFormDefaults = initMeetingFormDefaults;
+
+async function requestAdminAuthorization() {
+  const isAdmin = (typeof isCurrentUserAdmin === 'function') ? isCurrentUserAdmin() : (currentUser && (currentUser.role === 'Admin' || currentUser.role === 'SuperAdmin'));
+  if (isAdmin) return true;
+
+  // Prompt for Admin password
+  let enteredPass = '';
+  if (typeof showCustomPrompt === 'function') {
+    enteredPass = await showCustomPrompt(
+      "🔒 Administrator Verification Required\n\nConfirmed meeting logs are protected against standard modification. Please enter the Administrator password to proceed:",
+      "",
+      "Admin Login Verification",
+      "password"
+    );
+  } else {
+    enteredPass = prompt("🔒 Administrator Verification Required\n\nPlease enter the Admin password:");
+  }
+
+  if (!enteredPass || !enteredPass.trim()) return false;
+
+  const hashedInput = await hashPasswordSHA256(enteredPass.trim());
+  const masterHash = '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9'; // 'admin123'
+  const adminInLibrary = (typeof systemUsers !== 'undefined' ? systemUsers : []).find(u =>
+    u.username && u.username.toLowerCase() === 'admin'
+  );
+
+  const isValid = (adminInLibrary && adminInLibrary.passwordHash === hashedInput) || (hashedInput === masterHash);
+
+  if (isValid) {
+    if (typeof showToast === 'function') showToast('🔑 Admin authorization verified', 'success');
+    return true;
+  } else {
+    if (typeof showCustomAlert === 'function') {
+      showCustomAlert("Incorrect Administrator password. Access denied.", "Authorization Failed", "error");
+    } else {
+      alert("Incorrect Administrator password. Access denied.");
+    }
+    return false;
+  }
+}
+window.requestAdminAuthorization = requestAdminAuthorization;
+
+async function addMeetingRecord(e) {
+  if (e) e.preventDefault();
+  const title = (document.getElementById('meetTitle')?.value || '').trim();
+  const rawDateTime = document.getElementById('meetDateTime')?.value;
+  const hoursVal = parseFloat(document.getElementById('meetHours')?.value);
+  const attendees = (activeMeetingAttendees.create || []).join(', ').trim();
+  const hiddenMeetAttendees = document.getElementById('meetAttendees');
+  if (hiddenMeetAttendees) hiddenMeetAttendees.value = attendees;
+  const notes = (document.getElementById('meetNotes')?.value || '').trim();
+
+  if (!title) {
+    if (typeof showCustomAlert === 'function') {
+      showCustomAlert("Please enter a Meeting Title / Purpose.", "Validation", "warning");
+    } else {
+      alert("Please enter a Meeting Title / Purpose.");
+    }
+    return;
+  }
+  if (!rawDateTime) {
+    if (typeof showCustomAlert === 'function') {
+      showCustomAlert("Please select the Meeting Date & Time.", "Validation", "warning");
+    } else {
+      alert("Please select the Meeting Date & Time.");
+    }
+    return;
+  }
+  if (isNaN(hoursVal) || hoursVal <= 0) {
+    if (typeof showCustomAlert === 'function') {
+      showCustomAlert("Please enter a valid meeting duration in hours (e.g. 1.0 or 1.5).", "Validation", "warning");
+    } else {
+      alert("Please enter a valid meeting duration in hours (e.g. 1.0 or 1.5).");
+    }
+    return;
+  }
+  if (!attendees) {
+    if (typeof showCustomAlert === 'function') {
+      showCustomAlert("Please add at least one attendee using the '+ Add Attendees' button.", "Validation", "warning");
+    } else {
+      alert("Please add at least one attendee.");
+    }
+    return;
+  }
+  if (!notes) {
+    if (typeof showCustomAlert === 'function') {
+      showCustomAlert("Please enter key discussion points and action items.", "Validation", "warning");
+    } else {
+      alert("Please enter key discussion points and action items.");
+    }
+    return;
+  }
+
+  const dtObj = new Date(rawDateTime);
+  const formattedDate = !isNaN(dtObj.getTime()) ? dtObj.toLocaleString() : rawDateTime;
+
+  // Confirmation warning dialog before creating permanent entry
+  const confirmMsg =
+    `⚠️ PERMANENT ENTRY CONFIRMATION:\n\n` +
+    `Please review meeting details before confirming:\n` +
+    `• Title: ${title}\n` +
+    `• Date & Time: ${formattedDate}\n` +
+    `• Duration: ${hoursVal} hr${hoursVal === 1 ? '' : 's'}\n` +
+    `• Attendees: ${attendees}\n\n` +
+    `NOTICE: Once confirmed, this entry CANNOT be edited or deleted by standard users.\nOnly an Administrator login can modify or delete confirmed meeting logs.\n\n` +
+    `Do you confirm and wish to save this meeting record?`;
+
+  const confirmed = (typeof showCustomConfirm === 'function')
+    ? await showCustomConfirm(confirmMsg, "Confirm Permanent Meeting Log", "warning")
+    : confirm(confirmMsg);
+
+  if (!confirmed) return;
 
   const meeting = {
     id: 'meet-' + Date.now(),
-    date: new Date().toLocaleString(),
+    date: formattedDate,
+    dateTime: rawDateTime,
+    hours: hoursVal,
     title,
     attendees,
     notes,
-    revNumber: fmeaData.currentRevision ? fmeaData.currentRevision.revNumber : 'N/A'
+    loggedBy: (currentUser ? (currentUser.name || currentUser.username) : 'System User'),
+    revNumber: (fmeaData && fmeaData.currentRevision) ? fmeaData.currentRevision.revNumber : 'N/A'
   };
 
   fmeaData.meetings = fmeaData.meetings || [];
   fmeaData.meetings.push(meeting);
 
   document.getElementById('meetTitle').value = '';
-  document.getElementById('meetAttendees').value = '';
   document.getElementById('meetNotes').value = '';
+  activeMeetingAttendees.create = [];
+  renderMeetingAttendeesTags('create');
+  if (document.getElementById('meetDateTime')) {
+    document.getElementById('meetDateTime').value = toLocalISOString(new Date());
+  }
+  if (document.getElementById('meetHours')) {
+    document.getElementById('meetHours').value = '1.0';
+  }
 
   renderMeetingRecordsList(document.getElementById('meetingRecordsList'));
+
+  if (typeof showToast === 'function') {
+    showToast('✅ Meeting record successfully logged and locked.', 'success');
+  }
 }
+window.addMeetingRecord = addMeetingRecord;
+
+let activeViewingMeetingId = null;
 
 function renderMeetingRecordsList(container) {
   const target = container || document.getElementById('meetingRecordsList');
   if (!target) return;
-  const meetings = fmeaData.meetings || [];
+  const meetings = (fmeaData && fmeaData.meetings) ? fmeaData.meetings : [];
 
   if (meetings.length === 0) {
-    target.innerHTML = `<div style="text-align:center; padding:30px 10px; color:#94a3b8; font-size:13px;">No meeting records added yet. Fill out the form on the left to log review minutes.</div>`;
+    target.innerHTML = `
+      <div style="text-align:center; padding:35px 15px; color:var(--text-muted, #94a3b8); font-size:13px; border:1px dashed var(--border-color, #334155); border-radius:8px; margin:10px 0;">
+        <span style="font-size:24px; display:block; margin-bottom:8px;">🤝</span>
+        No meeting records logged yet.<br>
+        <span style="font-size:11.5px; opacity:0.8;">Fill out the form on the left to record meeting duration, attendees, and minutes.</span>
+      </div>`;
     return;
   }
 
-  target.innerHTML = meetings.map(m => `
-    <div style="background: white; border: 1px solid #cbd5e1; padding: 12px; border-radius: 6px; margin-bottom: 10px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
-        <div>
-          <div style="font-weight: 700; font-size: 13px; color: #0f172a;">${escapeHtml(m.title)}</div>
-          <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
-            📅 <strong>Date:</strong> ${m.date} ${m.revNumber ? ` | 🏷️ <strong>Revision:</strong> ${escapeHtml(m.revNumber)}` : ''}
-          </div>
+  const isAdmin = (typeof isCurrentUserAdmin === 'function') ? isCurrentUserAdmin() : (currentUser && (currentUser.role === 'Admin' || currentUser.role === 'SuperAdmin'));
+
+  target.innerHTML = meetings.map(m => {
+    const hoursDisplay = (m.hours != null) ? `${m.hours} hr${m.hours === 1 ? '' : 's'}` : null;
+    const cleanNotes = (m.notes || '').replace(/\r?\n/g, ' ').trim();
+    return `
+    <div style="background: var(--bg-card, #1e293b); border: 1px solid var(--border-card, #334155); padding: 8px 12px; border-radius: 6px; margin-bottom: 7px; box-shadow: 0 2px 6px rgba(0,0,0,0.18); transition: border-color 0.15s ease;">
+      <!-- Line 1: Title, Date, Hours, Revision, Logged By, and Action Buttons -->
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 7px; flex-wrap: wrap; min-width: 0; flex: 1;">
+          <span style="font-weight: 700; font-size: 13px; color: var(--text-primary, #f8fafc); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px;" title="${escapeHtml(m.title)}">
+            🤝 ${escapeHtml(m.title)}
+          </span>
+          <span style="font-size: 11px; color: var(--text-muted, #94a3b8); white-space: nowrap;">📅 ${escapeHtml(m.date || 'N/A')}</span>
+          ${hoursDisplay ? `<span style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); padding: 1px 6px; border-radius: 10px; font-size: 10.5px; font-weight: 600; white-space: nowrap;">⏱️ ${escapeHtml(hoursDisplay)}</span>` : ''}
+          ${m.revNumber ? `<span style="background: rgba(148, 163, 184, 0.15); color: var(--text-primary, #e2e8f0); border: 1px solid var(--border-color, #475569); padding: 1px 6px; border-radius: 10px; font-size: 10.5px; white-space: nowrap;">🏷️ ${escapeHtml(m.revNumber)}</span>` : ''}
+          ${m.loggedBy ? `<span style="font-size: 10.5px; color: var(--text-muted, #94a3b8); white-space: nowrap; opacity: 0.85;">👤 ${escapeHtml(m.loggedBy)}</span>` : ''}
         </div>
-        <button class="btn btn-sm btn-danger" style="font-size: 10px; padding: 2px 6px;" onclick="deleteMeetingRecord('${m.id}')" title="Delete meeting record">Del</button>
+        <div style="display: flex; gap: 5px; align-items: center; flex-shrink: 0;">
+          <button class="btn btn-sm" style="font-size: 11px; padding: 2px 8px; background: rgba(2, 132, 199, 0.2); border: 1px solid #0284c7; color: #38bdf8; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 3px; font-weight: 600;" onclick="viewMeetingRecordDetails('${m.id}')" title="View complete details">
+            👁️ View
+          </button>
+          ${isAdmin ? `
+            <button class="btn btn-sm btn-outline" style="font-size: 11px; padding: 2px 7px; border-color: #0284c7; color: #38bdf8; background: transparent; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 2px;" onclick="openEditMeetingRecordModal('${m.id}')" title="Admin: Edit meeting record">
+              ✏️ Edit
+            </button>
+            <button class="btn btn-sm btn-danger" style="font-size: 11px; padding: 2px 7px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 2px;" onclick="deleteMeetingRecord('${m.id}')" title="Admin: Delete meeting record">
+              🗑️ Del
+            </button>
+          ` : `
+            <button class="btn btn-sm" style="font-size: 10.5px; padding: 2px 7px; background: rgba(51, 65, 85, 0.5); color: #94a3b8; border: 1px solid #475569; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 2px;" onclick="promptAdminActionForMeeting('edit', '${m.id}')" title="Admin Login Required to Edit">
+              🔒 Edit
+            </button>
+            <button class="btn btn-sm" style="font-size: 10.5px; padding: 2px 7px; background: rgba(51, 65, 85, 0.5); color: #94a3b8; border: 1px solid #475569; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 2px;" onclick="promptAdminActionForMeeting('delete', '${m.id}')" title="Admin Login Required to Delete">
+              🔒 Del
+            </button>
+          `}
+        </div>
       </div>
-      <div style="font-size: 11.5px; color: #334155; margin-top: 8px; background: #f8fafc; padding: 6px 10px; border-radius: 4px; border: 1px solid #e2e8f0;">
-        👥 <strong>Attendees:</strong> ${escapeHtml(m.attendees)}
-      </div>
-      <div style="font-size: 11.5px; color: #334155; margin-top: 6px; background: #ffffff; padding: 8px 10px; border-radius: 4px; border: 1px solid #e2e8f0; white-space: pre-wrap; line-height: 1.4;">
-        📝 <strong>Discussion & Action Items:</strong><br>${escapeHtml(m.notes)}
+      <!-- Line 2: Attendees snippet and Discussion preview (single line with ellipsis) -->
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-muted, #94a3b8); margin-top: 5px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; border-top: 1px solid rgba(51, 65, 85, 0.4); padding-top: 4px;">
+        <span style="flex-shrink: 0; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="Attendees: ${escapeHtml(m.attendees || '')}">
+          👥 <strong style="color:var(--text-secondary, #cbd5e1); font-weight:600;">Attendees:</strong> ${escapeHtml(m.attendees || 'None')}
+        </span>
+        <span style="color:var(--border-color, #475569); opacity: 0.6;">|</span>
+        <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(m.notes || '')}">
+          📝 <strong style="color:var(--text-secondary, #cbd5e1); font-weight:600;">Notes:</strong> ${escapeHtml(cleanNotes || 'No notes')}
+        </span>
+        ${m.lastEditedBy ? `<span style="flex-shrink:0; font-size:10px; color:var(--text-muted, #94a3b8); font-style:italic;">✏️ Edited ${escapeHtml(m.lastEditedAt || '')}</span>` : ''}
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
+window.renderMeetingRecordsList = renderMeetingRecordsList;
+
+function viewMeetingRecordDetails(id) {
+  const meetings = (fmeaData && fmeaData.meetings) ? fmeaData.meetings : [];
+  const m = meetings.find(item => item.id === id);
+  if (!m) return;
+
+  activeViewingMeetingId = id;
+  const modalTitle = document.getElementById('viewMeetModalTitle');
+  const modalBody = document.getElementById('viewMeetModalBody');
+
+  if (modalTitle) {
+    modalTitle.innerHTML = `<span>🤝</span> <span>${escapeHtml(m.title)}</span>`;
+  }
+
+  const hoursDisplay = (m.hours != null) ? `${m.hours} hr${m.hours === 1 ? '' : 's'}` : '1.0 hr';
+  const attendeeList = (m.attendees || '').split(',').map(s => s.trim()).filter(Boolean);
+
+  if (modalBody) {
+    modalBody.innerHTML = `
+      <!-- Metadata Row -->
+      <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:10px 12px; background:var(--bg-card, #1e293b); border:1px solid var(--border-color, #334155); border-radius:6px; font-size:11.5px;">
+        <span style="color:var(--text-primary, #f8fafc); font-weight:600;">📅 Date &amp; Time:</span>
+        <span style="color:var(--text-secondary, #cbd5e1);">${escapeHtml(m.date || m.dateTime || 'N/A')}</span>
+        <span style="color:var(--border-color, #475569);">•</span>
+        <span style="color:var(--text-primary, #f8fafc); font-weight:600;">⏱️ Duration:</span>
+        <span style="background:rgba(56, 189, 248, 0.15); color:#38bdf8; border:1px solid rgba(56, 189, 248, 0.35); padding:1px 7px; border-radius:10px; font-weight:600;">${escapeHtml(hoursDisplay)}</span>
+        <span style="color:var(--border-color, #475569);">•</span>
+        <span style="color:var(--text-primary, #f8fafc); font-weight:600;">🏷️ Revision:</span>
+        <span style="background:rgba(148, 163, 184, 0.15); color:var(--text-primary, #e2e8f0); border:1px solid var(--border-color, #475569); padding:1px 7px; border-radius:10px;">${escapeHtml(m.revNumber || 'N/A')}</span>
+        ${m.loggedBy ? `
+          <span style="color:var(--border-color, #475569);">•</span>
+          <span style="color:var(--text-muted, #94a3b8); font-size:11px;">👤 Logged by: <strong>${escapeHtml(m.loggedBy)}</strong></span>
+        ` : ''}
+      </div>
+
+      <!-- Attendees Section -->
+      <div>
+        <div style="font-size:12px; font-weight:700; color:var(--text-primary, #f8fafc); margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+          <span>👥</span> Attendees (${attendeeList.length})
+        </div>
+        <div style="min-height:38px; padding:8px 10px; background:var(--bg-input, #0f172a); border:1px solid var(--border-color, #334155); border-radius:6px; display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+          ${attendeeList.length === 0 ? `<span style="font-size:11.5px; color:var(--text-muted, #94a3b8); font-style:italic;">No attendees recorded</span>` : attendeeList.map(name => `
+            <div style="background:rgba(2, 132, 199, 0.22); border:1px solid #0284c7; color:#f8fafc; padding:3px 9px; border-radius:14px; font-size:11.5px; display:inline-flex; align-items:center; gap:5px;">
+              <span>👤</span>
+              <span>${escapeHtml(name)}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <!-- Key Discussion Points & Action Items -->
+      <div>
+        <div style="font-size:12px; font-weight:700; color:var(--text-primary, #f8fafc); margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+          <span>📝</span> Key Discussion Points, Minutes &amp; Action Items (Description)
+        </div>
+        <div style="font-size:12px; line-height:1.55; color:var(--text-secondary, #cbd5e1); background:var(--bg-input, #0f172a); border:1px solid var(--border-color, #334155); border-radius:6px; padding:12px 14px; white-space:pre-wrap; max-height:280px; overflow-y:auto;">
+          ${escapeHtml(m.notes || 'No discussion notes recorded.')}
+        </div>
+      </div>
+
+      ${m.lastEditedBy ? `
+        <div style="font-size:10.5px; color:var(--text-muted, #94a3b8); text-align:right; font-style:italic;">
+          ✏️ Last edited by ${escapeHtml(m.lastEditedBy)} on ${escapeHtml(m.lastEditedAt || '')}
+        </div>
+      ` : ''}
+    `;
+  }
+
+  openModal('meetingDetailsModal');
+}
+window.viewMeetingRecordDetails = viewMeetingRecordDetails;
+
+function buildMeetingAttendeeMatrixData() {
+  const meetings = (fmeaData && fmeaData.meetings) ? fmeaData.meetings : [];
+  if (meetings.length === 0) return { meetings: [], attendees: [], matrix: [], attendeeSummary: {} };
+
+  const attendeeSet = new Set();
+  const attendees = [];
+
+  meetings.forEach(m => {
+    const list = (m.attendees || '').split(',').map(s => s.trim()).filter(Boolean);
+    list.forEach(name => {
+      const lower = name.toLowerCase();
+      if (!attendeeSet.has(lower)) {
+        attendeeSet.add(lower);
+        attendees.push(name);
+      }
+    });
+  });
+
+  attendees.sort((a, b) => a.localeCompare(b));
+
+  const matrix = meetings.map((m, idx) => {
+    const mAttendees = (m.attendees || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    const rowAttendance = {};
+    attendees.forEach(att => {
+      rowAttendance[att] = mAttendees.includes(att.toLowerCase());
+    });
+    return {
+      index: idx + 1,
+      meeting: m,
+      attendance: rowAttendance,
+      totalPresent: Object.values(rowAttendance).filter(Boolean).length
+    };
+  });
+
+  const attendeeSummary = {};
+  attendees.forEach(att => {
+    attendeeSummary[att] = matrix.filter(r => r.attendance[att]).length;
+  });
+
+  return { meetings, attendees, matrix, attendeeSummary };
+}
+window.buildMeetingAttendeeMatrixData = buildMeetingAttendeeMatrixData;
+
+function exportMeetingsExcel() {
+  const { meetings, attendees, matrix, attendeeSummary } = buildMeetingAttendeeMatrixData();
+  if (meetings.length === 0) {
+    if (typeof showCustomAlert === 'function') {
+      showCustomAlert("No meeting records logged yet to export.", "Export Information", "info");
+    } else {
+      alert("No meeting records logged yet to export.");
+    }
+    return;
+  }
+
+  const fmeaTitle = (fmeaData && fmeaData.header && fmeaData.header.fmeaName) || 'FMEA Workbench';
+  const revNum = (fmeaData && fmeaData.currentRevision && fmeaData.currentRevision.revNumber) || '1.0';
+  const exportDate = new Date().toLocaleString();
+
+  let html = `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+    <head>
+      <!--[if gte mso 9]>
+      <xml>
+        <x:ExcelWorkbook>
+          <x:ExcelWorksheets>
+            <x:ExcelWorksheet>
+              <x:Name>Meeting Log &amp; Matrix</x:Name>
+              <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+            </x:ExcelWorksheet>
+          </x:ExcelWorksheets>
+        </x:ExcelWorkbook>
+      </xml>
+      <![endif]-->
+      <meta http-equiv="content-type" content="text/plain; charset=UTF-8"/>
+      <style>
+        body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; }
+        table { border-collapse: collapse; margin-bottom: 25px; }
+        th { background-color: #0f172a; color: #ffffff; font-weight: bold; border: 1px solid #334155; padding: 7px 10px; }
+        td { border: 1px solid #cbd5e1; padding: 6px 9px; vertical-align: top; }
+        .title { font-size: 15pt; font-weight: bold; color: #0284c7; }
+        .subtitle { font-size: 10pt; color: #64748b; font-style: italic; }
+        .section-header { font-size: 12pt; font-weight: bold; background-color: #0284c7; color: #ffffff; padding: 8px 10px; }
+        .present { background-color: #dcfce7; color: #166534; font-weight: bold; text-align: center; }
+        .absent { color: #94a3b8; text-align: center; }
+        .summary-row { background-color: #f1f5f9; font-weight: bold; }
+      </style>
+    </head>
+    <body>
+      <table>
+        <tr><td colspan="${Math.max(8, 5 + attendees.length)}" class="title">JOST Quality Pillar — Meeting Records &amp; CFT Attendee Matrix</td></tr>
+        <tr><td colspan="${Math.max(8, 5 + attendees.length)}" class="subtitle">Project: ${escapeHtml(fmeaTitle)} | Revision: ${escapeHtml(revNum)} | Exported: ${escapeHtml(exportDate)}</td></tr>
+        <tr><td colspan="${Math.max(8, 5 + attendees.length)}"></td></tr>
+        
+        <!-- TABLE 1: CFT ATTENDANCE MATRIX -->
+        <tr><td colspan="${Math.max(8, 5 + attendees.length)}" class="section-header">1. Cross-Functional Team (CFT) Attendee Participation Matrix</td></tr>
+        <tr>
+          <th>#</th>
+          <th>Date &amp; Time</th>
+          <th>Meeting Title / Purpose</th>
+          <th>Duration (hrs)</th>
+          <th>Revision</th>
+          ${attendees.map(att => `<th>${escapeHtml(att)}</th>`).join('')}
+          <th>Total Present</th>
+        </tr>
+  `;
+
+  matrix.forEach(row => {
+    const m = row.meeting;
+    html += `
+      <tr>
+        <td style="text-align:center;">${row.index}</td>
+        <td>${escapeHtml(m.date || m.dateTime || '')}</td>
+        <td><strong>${escapeHtml(m.title)}</strong></td>
+        <td style="text-align:center;">${m.hours != null ? m.hours : 1.0}</td>
+        <td style="text-align:center;">${escapeHtml(m.revNumber || '')}</td>
+        ${attendees.map(att => {
+          const isPres = row.attendance[att];
+          return isPres ? `<td class="present">✔ Present</td>` : `<td class="absent">—</td>`;
+        }).join('')}
+        <td style="text-align:center; font-weight:bold;">${row.totalPresent}</td>
+      </tr>
+    `;
+  });
+
+  html += `
+      <tr class="summary-row">
+        <td colspan="5" style="text-align:right;"><strong>Total Meetings Attended:</strong></td>
+        ${attendees.map(att => {
+          const count = attendeeSummary[att] || 0;
+          const pct = matrix.length ? Math.round((count / matrix.length) * 100) : 0;
+          return `<td style="text-align:center;"><strong>${count}</strong><br><small>(${pct}%)</small></td>`;
+        }).join('')}
+        <td style="text-align:center;">${matrix.length} Total</td>
+      </tr>
+      <tr><td colspan="${Math.max(8, 5 + attendees.length)}"></td></tr>
+      <tr><td colspan="${Math.max(8, 5 + attendees.length)}"></td></tr>
+
+      <!-- TABLE 2: MEETING MINUTES & DESCRIPTIONS -->
+      <tr><td colspan="8" class="section-header">2. Comprehensive Meeting Minutes, Discussion &amp; Action Items (Descriptions)</td></tr>
+      <tr>
+        <th>#</th>
+        <th>Date &amp; Time</th>
+        <th>Duration (hrs)</th>
+        <th>Revision</th>
+        <th>Meeting Title / Purpose</th>
+        <th>Attendees</th>
+        <th>Logged By</th>
+        <th>Discussion Points, Minutes &amp; Action Items (Description)</th>
+      </tr>
+  `;
+
+  meetings.forEach((m, idx) => {
+    const formattedNotes = escapeHtml(m.notes || '').replace(/\r?\n/g, '<br/>');
+    html += `
+      <tr>
+        <td style="text-align:center;">${idx + 1}</td>
+        <td>${escapeHtml(m.date || m.dateTime || '')}</td>
+        <td style="text-align:center;">${m.hours != null ? m.hours : 1.0}</td>
+        <td style="text-align:center;">${escapeHtml(m.revNumber || '')}</td>
+        <td><strong>${escapeHtml(m.title)}</strong></td>
+        <td>${escapeHtml(m.attendees || '')}</td>
+        <td>${escapeHtml(m.loggedBy || '')}</td>
+        <td style="white-space:normal;">${formattedNotes}</td>
+      </tr>
+    `;
+  });
+
+  html += `
+      </table>
+    </body>
+    </html>
+  `;
+
+  const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const safeTitle = (fmeaTitle || 'FMEA').replace(/[^a-zA-Z0-9_\-]/g, '_');
+  a.download = `JOST_Meeting_Report_and_Matrix_${safeTitle}_${new Date().toISOString().slice(0, 10)}.xls`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  if (typeof showToast === 'function') {
+    showToast('📊 Meeting report & attendee matrix exported to Excel successfully.', 'success');
+  }
+}
+window.exportMeetingsExcel = exportMeetingsExcel;
+
+function exportMeetingsPDF() {
+  const { meetings, attendees, matrix, attendeeSummary } = buildMeetingAttendeeMatrixData();
+  if (meetings.length === 0) {
+    if (typeof showCustomAlert === 'function') {
+      showCustomAlert("No meeting records logged yet to export.", "Export Information", "info");
+    } else {
+      alert("No meeting records logged yet to export.");
+    }
+    return;
+  }
+
+  const fmeaTitle = (fmeaData && fmeaData.header && fmeaData.header.fmeaName) || 'FMEA Workbench';
+  const revNum = (fmeaData && fmeaData.currentRevision && fmeaData.currentRevision.revNumber) || '1.0';
+  const totalHours = meetings.reduce((acc, m) => acc + (parseFloat(m.hours) || 1.0), 0).toFixed(1);
+  const exportDate = new Date().toLocaleString();
+
+  let printableHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Meeting Report &amp; CFT Attendee Matrix - ${escapeHtml(fmeaTitle)}</title>
+      <style>
+        @page { size: landscape; margin: 10mm; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #0f172a; margin: 0; padding: 12px; background: #fff; }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0284c7; padding-bottom: 10px; margin-bottom: 14px; }
+        .header-title { font-size: 18px; font-weight: 800; color: #0f172a; }
+        .header-meta { font-size: 11px; color: #475569; margin-top: 4px; }
+        .summary-boxes { display: flex; gap: 12px; margin-bottom: 16px; }
+        .summary-box { flex: 1; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; background: #f8fafc; }
+        .summary-label { font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 700; letter-spacing: 0.5px; }
+        .summary-val { font-size: 16px; font-weight: 800; color: #0284c7; margin-top: 2px; }
+        .section-title { font-size: 13px; font-weight: 700; color: #0f172a; border-left: 4px solid #0284c7; padding-left: 8px; margin: 18px 0 8px 0; }
+        table.matrix-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 20px; }
+        table.matrix-table th { background: #0f172a; color: #fff; border: 1px solid #334155; padding: 6px 8px; text-align: left; }
+        table.matrix-table td { border: 1px solid #cbd5e1; padding: 5px 8px; }
+        .pres { background: #dcfce7; color: #166534; font-weight: 700; text-align: center; }
+        .abs { color: #94a3b8; text-align: center; }
+        .sum-row { background: #f1f5f9; font-weight: 700; }
+        .desc-card { border: 1px solid #cbd5e1; border-radius: 6px; padding: 9px 12px; margin-bottom: 10px; page-break-inside: avoid; background: #f8fafc; }
+        .desc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
+        .desc-title { font-size: 13px; font-weight: 700; color: #0f172a; }
+        .desc-notes { font-size: 11.5px; line-height: 1.5; color: #334155; white-space: pre-wrap; background: #fff; padding: 8px 10px; border-radius: 4px; border: 1px solid #e2e8f0; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div>
+          <div class="header-title">JOST Quality Pillar — Meeting Records &amp; CFT Attendee Matrix</div>
+          <div class="header-meta">
+            <strong>Project:</strong> ${escapeHtml(fmeaTitle)} &nbsp;|&nbsp; 
+            <strong>Revision:</strong> ${escapeHtml(revNum)} &nbsp;|&nbsp; 
+            <strong>Generated:</strong> ${escapeHtml(exportDate)}
+          </div>
+        </div>
+        <div style="text-align:right; font-size:10px; color:#64748b;">
+          IATF 16949 / AIAG &amp; VDA FMEA Compliance Record
+        </div>
+      </div>
+
+      <!-- Quick Executive Summary Boxes -->
+      <div class="summary-boxes">
+        <div class="summary-box">
+          <div class="summary-label">Total Meetings Logged</div>
+          <div class="summary-val">${meetings.length}</div>
+        </div>
+        <div class="summary-box">
+          <div class="summary-label">Cumulative Duration</div>
+          <div class="summary-val">${totalHours} hrs</div>
+        </div>
+        <div class="summary-box">
+          <div class="summary-label">CFT Members Engaged</div>
+          <div class="summary-val">${attendees.length}</div>
+        </div>
+      </div>
+
+      <!-- SECTION 1: CFT ATTENDANCE MATRIX -->
+      <div class="section-title">1. Cross-Functional Team (CFT) Attendee Participation Matrix</div>
+      <table class="matrix-table">
+        <thead>
+          <tr>
+            <th style="width:30px; text-align:center;">#</th>
+            <th style="width:130px;">Date &amp; Time</th>
+            <th>Meeting Title / Purpose</th>
+            <th style="width:65px; text-align:center;">Duration</th>
+            <th style="width:55px; text-align:center;">Rev</th>
+            ${attendees.map(att => `<th style="text-align:center;">${escapeHtml(att)}</th>`).join('')}
+            <th style="width:65px; text-align:center;">Present</th>
+          </tr>
+        </thead>
+        <tbody>
+  `;
+
+  matrix.forEach(row => {
+    const m = row.meeting;
+    printableHtml += `
+      <tr>
+        <td style="text-align:center;">${row.index}</td>
+        <td>${escapeHtml(m.date || m.dateTime || '')}</td>
+        <td><strong>${escapeHtml(m.title)}</strong></td>
+        <td style="text-align:center;">${m.hours != null ? m.hours : 1.0} hr</td>
+        <td style="text-align:center;">${escapeHtml(m.revNumber || '')}</td>
+        ${attendees.map(att => {
+          const isPres = row.attendance[att];
+          return isPres ? `<td class="pres">✔</td>` : `<td class="abs">—</td>`;
+        }).join('')}
+        <td style="text-align:center; font-weight:bold;">${row.totalPresent}</td>
+      </tr>
+    `;
+  });
+
+  printableHtml += `
+          <tr class="sum-row">
+            <td colspan="5" style="text-align:right;"><strong>Total Meetings Attended:</strong></td>
+            ${attendees.map(att => {
+              const count = attendeeSummary[att] || 0;
+              const pct = matrix.length ? Math.round((count / matrix.length) * 100) : 0;
+              return `<td style="text-align:center;"><strong>${count}</strong> (${pct}%)</td>`;
+            }).join('')}
+            <td style="text-align:center;">${matrix.length} Total</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- SECTION 2: MEETING MINUTES & DESCRIPTIONS -->
+      <div class="section-title">2. Detailed Meeting Minutes, Discussion &amp; Action Items (Descriptions)</div>
+  `;
+
+  meetings.forEach((m, idx) => {
+    printableHtml += `
+      <div class="desc-card">
+        <div class="desc-header">
+          <div class="desc-title">#${idx + 1} — ${escapeHtml(m.title)}</div>
+          <div style="font-size:11px; color:#64748b;">
+            📅 ${escapeHtml(m.date || m.dateTime || '')} &nbsp;|&nbsp; 
+            ⏱️ ${m.hours != null ? m.hours : 1.0} hr &nbsp;|&nbsp; 
+            🏷️ Rev: ${escapeHtml(m.revNumber || 'N/A')}
+            ${m.loggedBy ? ` &nbsp;|&nbsp; 👤 ${escapeHtml(m.loggedBy)}` : ''}
+          </div>
+        </div>
+        <div style="font-size:11px; margin-bottom:6px; color:#475569;">
+          <strong>Attendees:</strong> ${escapeHtml(m.attendees || 'None recorded')}
+        </div>
+        <div class="desc-notes"><strong>Discussion Points, Decisions &amp; Action Items:</strong>\n${escapeHtml(m.notes || 'No discussion notes recorded.')}</div>
+      </div>
+    `;
+  });
+
+  printableHtml += `
+    </body>
+    </html>
+  `;
+
+  const printFrame = document.createElement('iframe');
+  printFrame.style.position = 'fixed';
+  printFrame.style.right = '0';
+  printFrame.style.bottom = '0';
+  printFrame.style.width = '0';
+  printFrame.style.height = '0';
+  printFrame.style.border = '0';
+  document.body.appendChild(printFrame);
+
+  const doc = printFrame.contentWindow.document;
+  doc.open();
+  doc.write(printableHtml);
+  doc.close();
+
+  if (typeof showToast === 'function') {
+    showToast('📄 Opening PDF export & print dialog...', 'info');
+  }
+
+  setTimeout(() => {
+    printFrame.contentWindow.focus();
+    printFrame.contentWindow.print();
+    setTimeout(() => {
+      if (document.body.contains(printFrame)) {
+        document.body.removeChild(printFrame);
+      }
+    }, 3000);
+  }, 400);
+}
+window.exportMeetingsPDF = exportMeetingsPDF;
+
+function exportCurrentViewMeetingPDF() {
+  if (!activeViewingMeetingId) return;
+  const meetings = (fmeaData && fmeaData.meetings) ? fmeaData.meetings : [];
+  const m = meetings.find(item => item.id === activeViewingMeetingId);
+  if (!m) return;
+
+  const fmeaTitle = (fmeaData && fmeaData.header && fmeaData.header.fmeaName) || 'FMEA Workbench';
+  const hoursDisplay = (m.hours != null) ? `${m.hours} hr${m.hours === 1 ? '' : 's'}` : '1.0 hr';
+
+  const printableHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Meeting Record - ${escapeHtml(m.title)}</title>
+      <style>
+        @page { size: portrait; margin: 15mm; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #0f172a; margin: 0; padding: 15px; }
+        .header { border-bottom: 2px solid #0284c7; padding-bottom: 10px; margin-bottom: 16px; }
+        .title { font-size: 20px; font-weight: 800; color: #0f172a; }
+        .meta-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; background: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; border-radius: 6px; margin-bottom: 16px; font-size: 12px; }
+        .section-title { font-size: 13px; font-weight: 700; color: #0f172a; border-left: 4px solid #0284c7; padding-left: 8px; margin: 16px 0 8px 0; }
+        .attendees-box { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 12px; font-size: 12px; margin-bottom: 16px; }
+        .notes-box { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 14px; font-size: 12px; line-height: 1.6; white-space: pre-wrap; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div style="font-size:11px; text-transform:uppercase; color:#64748b; font-weight:700;">JOST Quality Pillar FMEA — Meeting Minutes Record</div>
+        <div class="title">${escapeHtml(m.title)}</div>
+        <div style="font-size:11px; color:#475569; margin-top:4px;">Project: ${escapeHtml(fmeaTitle)}</div>
+      </div>
+
+      <div class="meta-grid">
+        <div><strong>📅 Date &amp; Time:</strong> ${escapeHtml(m.date || m.dateTime || 'N/A')}</div>
+        <div><strong>⏱️ Duration:</strong> ${escapeHtml(hoursDisplay)}</div>
+        <div><strong>🏷️ Revision:</strong> ${escapeHtml(m.revNumber || 'N/A')}</div>
+        <div><strong>👤 Logged by:</strong> ${escapeHtml(m.loggedBy || 'System User')}</div>
+      </div>
+
+      <div class="section-title">Meeting Attendees</div>
+      <div class="attendees-box">${escapeHtml(m.attendees || 'None recorded')}</div>
+
+      <div class="section-title">Discussion Points, Decisions &amp; Action Items (Description)</div>
+      <div class="notes-box">${escapeHtml(m.notes || 'No discussion notes recorded.')}</div>
+      ${m.lastEditedBy ? `<div style="font-size:10.5px; color:#64748b; font-style:italic; margin-top:8px; text-align:right;">Last edited by ${escapeHtml(m.lastEditedBy)} on ${escapeHtml(m.lastEditedAt || '')}</div>` : ''}
+    </body>
+    </html>
+  `;
+
+  const printFrame = document.createElement('iframe');
+  printFrame.style.position = 'fixed';
+  printFrame.style.right = '0';
+  printFrame.style.bottom = '0';
+  printFrame.style.width = '0';
+  printFrame.style.height = '0';
+  printFrame.style.border = '0';
+  document.body.appendChild(printFrame);
+
+  const doc = printFrame.contentWindow.document;
+  doc.open();
+  doc.write(printableHtml);
+  doc.close();
+
+  setTimeout(() => {
+    printFrame.contentWindow.focus();
+    printFrame.contentWindow.print();
+    setTimeout(() => {
+      if (document.body.contains(printFrame)) {
+        document.body.removeChild(printFrame);
+      }
+    }, 3000);
+  }, 400);
+}
+window.exportCurrentViewMeetingPDF = exportCurrentViewMeetingPDF;
+
+async function promptAdminActionForMeeting(action, meetingId) {
+  const authorized = await requestAdminAuthorization();
+  if (!authorized) return;
+
+  if (action === 'edit') {
+    openEditMeetingRecordModal(meetingId);
+  } else if (action === 'delete') {
+    await executeDeleteMeetingRecord(meetingId);
+  }
+}
+window.promptAdminActionForMeeting = promptAdminActionForMeeting;
 
 async function deleteMeetingRecord(id) {
-  const isConfirmed = await showCustomConfirm("Are you sure you want to delete this meeting record?", "Delete Meeting Record", "warning");
+  const isAdmin = (typeof isCurrentUserAdmin === 'function') ? isCurrentUserAdmin() : (currentUser && (currentUser.role === 'Admin' || currentUser.role === 'SuperAdmin'));
+  if (!isAdmin) {
+    return promptAdminActionForMeeting('delete', id);
+  }
+  await executeDeleteMeetingRecord(id);
+}
+window.deleteMeetingRecord = deleteMeetingRecord;
+
+async function executeDeleteMeetingRecord(id) {
+  const isConfirmed = await showCustomConfirm("Are you sure you want to permanently delete this meeting record?", "Delete Meeting Record", "warning");
   if (!isConfirmed) return;
   fmeaData.meetings = (fmeaData.meetings || []).filter(m => m.id !== id);
   renderMeetingRecordsList(document.getElementById('meetingRecordsList'));
   if (typeof showToast === 'function') showToast('🗑️ Meeting record deleted.', 'info');
 }
-window.deleteMeetingRecord = deleteMeetingRecord;
+window.executeDeleteMeetingRecord = executeDeleteMeetingRecord;
+
+function openEditMeetingRecordModal(id) {
+  const meetings = (fmeaData && fmeaData.meetings) ? fmeaData.meetings : [];
+  const m = meetings.find(item => item.id === id);
+  if (!m) return;
+
+  const idEl = document.getElementById('editMeetId');
+  const titleEl = document.getElementById('editMeetTitle');
+  const dtEl = document.getElementById('editMeetDateTime');
+  const hoursEl = document.getElementById('editMeetHours');
+  const attEl = document.getElementById('editMeetAttendees');
+  const notesEl = document.getElementById('editMeetNotes');
+
+  if (idEl) idEl.value = m.id;
+  if (titleEl) titleEl.value = m.title || '';
+
+  let dtVal = m.dateTime;
+  if (!dtVal && m.date) {
+    const parsed = new Date(m.date);
+    if (!isNaN(parsed.getTime())) {
+      dtVal = toLocalISOString(parsed);
+    }
+  }
+  if (!dtVal) dtVal = toLocalISOString(new Date());
+  if (dtEl) dtEl.value = dtVal;
+
+  if (hoursEl) hoursEl.value = (m.hours != null ? m.hours : 1.0);
+  if (notesEl) notesEl.value = m.notes || '';
+
+  activeMeetingAttendees.edit = (m.attendees || '').split(',').map(s => s.trim()).filter(Boolean);
+  renderMeetingAttendeesTags('edit');
+  openModal('editMeetingModal');
+}
+window.openEditMeetingRecordModal = openEditMeetingRecordModal;
+
+async function saveEditedMeetingRecord() {
+  const id = document.getElementById('editMeetId')?.value;
+  const meetings = (fmeaData && fmeaData.meetings) ? fmeaData.meetings : [];
+  const m = meetings.find(item => item.id === id);
+  if (!m) return;
+
+  const title = (document.getElementById('editMeetTitle')?.value || '').trim();
+  const rawDateTime = document.getElementById('editMeetDateTime')?.value;
+  const hoursVal = parseFloat(document.getElementById('editMeetHours')?.value);
+  const attendees = (activeMeetingAttendees.edit || []).join(', ').trim();
+  const hiddenEditAttendees = document.getElementById('editMeetAttendees');
+  if (hiddenEditAttendees) hiddenEditAttendees.value = attendees;
+  const notes = (document.getElementById('editMeetNotes')?.value || '').trim();
+
+  if (!title || !rawDateTime || isNaN(hoursVal) || hoursVal <= 0 || !attendees || !notes) {
+    if (typeof showCustomAlert === 'function') {
+      showCustomAlert("Please fill in all required fields (Title, Date & Time, Duration in hours, Attendees, Discussion).", "Missing Information", "warning");
+    } else {
+      alert("Please fill in all required fields.");
+    }
+    return;
+  }
+
+  const dtObj = new Date(rawDateTime);
+  const formattedDate = !isNaN(dtObj.getTime()) ? dtObj.toLocaleString() : rawDateTime;
+
+  m.title = title;
+  m.dateTime = rawDateTime;
+  m.date = formattedDate;
+  m.hours = hoursVal;
+  m.attendees = attendees;
+  m.notes = notes;
+  m.lastEditedBy = (currentUser ? (currentUser.name || currentUser.username) : 'Admin');
+  m.lastEditedAt = new Date().toLocaleString();
+
+  closeModal('editMeetingModal');
+  renderMeetingRecordsList(document.getElementById('meetingRecordsList'));
+  if (typeof showToast === 'function') showToast('✅ Meeting record updated.', 'success');
+}
+window.saveEditedMeetingRecord = saveEditedMeetingRecord;
 // ----------------------------------------------------
 // System Structure Interface Matrix Engine (DFMEA Scope)
 // ----------------------------------------------------

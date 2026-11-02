@@ -21712,16 +21712,27 @@ function formatRPNBadgeHTML(s, occ, det, isVDA) {
   }
 }
 
-function renderCauseFormattedCell(cause, idx) {
+function renderCauseFormattedCell(cause, idx, diffObj = null) {
   if (!cause) return '-';
   const sysTag = buildColoredHierarchyTag(cause.systemElement, cause.function, cause.requirement);
   const numLabel = (typeof idx === 'number') ? `${idx + 1}.` : '1.';
   const descText = cause.details || cause.desc || cause.name || cause.text || '';
+  let formattedDesc = escapeHtml(descText);
+  if (diffObj && diffObj.type === 'MODIFIED' && (diffObj.oldCauseName || diffObj.oldDetails)) {
+    const oldText = diffObj.oldCauseName || diffObj.oldDetails;
+    if (typeof formatInlineDiffText === 'function') {
+      formattedDesc = formatInlineDiffText(oldText, descText, 'Failure Cause');
+    } else {
+      formattedDesc = `<span class="inline-diff-wrapper" title="Previous Failure Cause: &quot;${escapeHtml(oldText)}&quot; ➔ Current: &quot;${escapeHtml(descText)}&quot;"><del style="color:#ef4444; text-decoration:line-through; background:rgba(239,68,68,0.12); padding:1px 4px; border-radius:3px; margin-right:4px;">${escapeHtml(oldText)}</del><ins style="color:#15803d; text-decoration:none; font-weight:600; background:rgba(34,197,94,0.12); padding:1px 4px; border-radius:3px;">${escapeHtml(descText)}</ins></span>`;
+    }
+  } else if (diffObj && diffObj.type === 'ADDED') {
+    formattedDesc = `<span class="inline-diff-added inline-flex items-center gap-1"><ins style="color:#15803d; text-decoration:none; font-weight:600; background:rgba(34,197,94,0.12); padding:1px 4px; border-radius:3px;">${escapeHtml(descText)}</ins> <span style="font-size:9px; background:#dcfce7; color:#15803d; font-weight:700; padding:1px 4px; border-radius:3px; border:1px solid #86efac;">+ ADDED</span></span>`;
+  }
   return `<div class="fmea-cause-item" data-cause-id="${cause.id || ''}" data-cause-text="${escapeHtml(descText)}" style="text-align:left; margin-bottom:4px; display:flex;">
     <div style="font-weight:bold; color:var(--text-secondary); font-size:11.5px; margin-bottom:2px;">${numLabel}</div>
     <div style="padding-left:4px;">
       ${sysTag}
-      <div style="font-weight:600; color:var(--text-primary); margin-top:2px;">${escapeHtml(descText)}</div>
+      <div style="font-weight:600; color:var(--text-primary); margin-top:2px;">${formattedDesc}</div>
     </div>
   </div>`;
 }
@@ -26669,22 +26680,35 @@ function renderFMEATable(force = false) {
       const tileRat = document.getElementById('cmpTileRatings');
       const tileAct = document.getElementById('cmpTileActions');
 
-      if (titleEl) titleEl.innerText = `Revision ${targetRev.revNumber} Comparison View`;
+      const targetLabel = String(targetRev.revNumber || '').trim().startsWith('Rev') ? targetRev.revNumber : `Rev ${targetRev.revNumber}`;
+      const prevLabel = prevRev ? (String(prevRev.revNumber || '').trim().startsWith('Rev') ? prevRev.revNumber : `Rev ${prevRev.revNumber}`) : 'Baseline';
+      if (titleEl) titleEl.innerText = `${targetLabel} Comparison View`;
 
       const focusedNode = selectedStructureId ? getStructureNodeById(fmeaData.structure, selectedStructureId) : null;
       const scopeLabel = focusedNode
         ? `📌 Showing: "${focusedNode.partNo} - ${focusedNode.name}" — Click 🌐 All Elements to see full FMEA`
         : `🌐 Showing all elements — Click 📌 Element View then select a sidebar element to focus`;
-      if (subEl) subEl.innerText = `Rev ${targetRev.revNumber} vs Rev ${prevRev ? prevRev.revNumber : 'Baseline'} | ${scopeLabel}`;
+      if (subEl) subEl.innerText = `${targetLabel} vs ${prevLabel} | ${scopeLabel}`;
 
       const btnEl = document.getElementById('cmpBtnElementMode');
       const btnAll = document.getElementById('cmpBtnAllMode');
       if (btnEl && btnAll) {
         const isAll = viewCompleteFmeaMode || !selectedStructureId;
-        btnEl.style.background = isAll ? 'transparent' : '#0284c7';
-        btnEl.style.color = isAll ? '#475569' : '#fff';
-        btnAll.style.background = isAll ? '#0284c7' : 'transparent';
-        btnAll.style.color = isAll ? '#fff' : '#475569';
+        if (isAll) {
+          btnEl.classList.remove('active');
+          btnAll.classList.add('active');
+          btnEl.style.background = 'transparent';
+          btnEl.style.color = 'var(--text-muted, #94a3b8)';
+          btnAll.style.background = '#0284c7';
+          btnAll.style.color = '#ffffff';
+        } else {
+          btnEl.classList.add('active');
+          btnAll.classList.remove('active');
+          btnEl.style.background = '#0284c7';
+          btnEl.style.color = '#ffffff';
+          btnAll.style.background = 'transparent';
+          btnAll.style.color = 'var(--text-muted, #94a3b8)';
+        }
       }
 
       if (tileAdd) tileAdd.innerText = `+${report.stats.totalAdded}`;
@@ -27115,7 +27139,9 @@ function renderFMEATable(force = false) {
 
         linkedCauses.forEach((cause, cIdx) => {
           const causeVarNames = getVariantNamesDisplay(cause.variants);
-          const causeDiff = activeComparisonState ? activeComparisonState.diffMap.causes.get(cause.id) : null;
+          const causeDiff = activeComparisonState
+            ? (activeComparisonState.diffMap.fmCauses?.get(fm.id + '_' + cause.id) || activeComparisonState.diffMap.causes?.get(cause.id) || null)
+            : null;
           const causeAttr = getDiffCellAttr(causeDiff);
           const causeBadge = getDiffBadgeHtml(causeDiff);
 
@@ -27148,8 +27174,20 @@ function renderFMEATable(force = false) {
             const detVarNames = getVariantNamesDisplay(detCtrls.map(c => c.variants || c.variantId));
             const prevCtrlStrPlain = prevCtrls.map(c => c.desc).join('; ') || '-';
             const detCtrlStrPlain = detCtrls.map(c => c.desc).join('; ') || '-';
-            const prevCtrlStr = prevCtrls.map(c => `• ${escapeHtml(c.desc)}`).join('<br>') || (isReadOnly ? '-' : '<span class="text-muted">Dbl-click to link</span>');
-            const detCtrlStr = detCtrls.map(c => `• ${escapeHtml(c.desc)}`).join('<br>') || (isReadOnly ? '-' : '<span class="text-muted">Dbl-click to link</span>');
+
+            const formatCtrlWithDiff = (c) => {
+              const cDiff = activeComparisonState ? (activeComparisonState.diffMap.causeControls?.get(cause.id + '_' + c.id) || activeComparisonState.diffMap.controls?.get(c.id)) : null;
+              if (cDiff && cDiff.type === 'ADDED') {
+                return `• <ins style="color:#15803d; text-decoration:none; font-weight:600; background:rgba(34,197,94,0.12); padding:1px 4px; border-radius:3px;">${escapeHtml(c.desc)}</ins> <span style="font-size:9px; background:#dcfce7; color:#15803d; font-weight:700; padding:1px 4px; border-radius:3px; border:1px solid #86efac;">+ ADDED</span>`;
+              }
+              if (cDiff && cDiff.type === 'MODIFIED' && cDiff.oldDesc) {
+                return `• ${formatInlineDiffText(cDiff.oldDesc, c.desc, 'Control Method')}`;
+              }
+              return `• ${escapeHtml(c.desc)}`;
+            };
+
+            const prevCtrlStr = prevCtrls.map(c => formatCtrlWithDiff(c)).join('<br>') || (isReadOnly ? '-' : '<span class="text-muted">Dbl-click to link</span>');
+            const detCtrlStr = detCtrls.map(c => formatCtrlWithDiff(c)).join('<br>') || (isReadOnly ? '-' : '<span class="text-muted">Dbl-click to link</span>');
 
             const actIds = getActionsForCharacteristicOrCause(null, cause.id);
             const linkedActions = allActsSource.filter(a => actIds.includes(a.id) && matchesVariantFilter(a.variants || a.variantId));
@@ -27164,7 +27202,7 @@ function renderFMEATable(force = false) {
                   fmId: fm.id, fm, fmAttr, fmBadge, fmSyncBadge, effectVarNames, effAttr, effBadge, effDiff, maxSeverity, effectsStr,
                   causeId: cause.id, cause, cIdx, causeVarNames, causeDiff, causeAttr, causeBadge, prevVarNames, detVarNames, prevCtrlStrPlain, detCtrlStrPlain, prevCtrlStr, detCtrlStr, hasValidCause, occ, det, rpn, ap, effSev, evalDispPlain, highestClass, dblChar,
                   charObj: null, isProductChar: false,
-                  actId: null, act: null
+                  actId: null, act: null, actDiff: null
                 });
               }
             } else {
@@ -27183,7 +27221,9 @@ function renderFMEATable(force = false) {
               linkedActions.forEach((act, actIdx) => {
                 const actVarNames = getVariantNamesDisplay(act.variants || act.variantId);
                 const actDetail = act.detail ? escapeHtml(act.detail) : (isReadOnly ? '-' : '<span class="text-muted">Dbl-click to link actions</span>');
-                const actDiff = activeComparisonState ? activeComparisonState.diffMap.actions.get(act.id) : null;
+                const actDiff = activeComparisonState
+                  ? (activeComparisonState.diffMap.causeActions?.get(cause.id + '_' + act.id) || activeComparisonState.diffMap.actions?.get(act.id) || null)
+                  : null;
                 const actAttr = getDiffCellAttr(actDiff);
                 const actBadge = getDiffBadgeHtml(actDiff);
 
@@ -27196,7 +27236,7 @@ function renderFMEATable(force = false) {
                     fmId: fm.id, fm, fmAttr, fmBadge, fmSyncBadge, effectVarNames, effAttr, effBadge, effDiff, maxSeverity, effectsStr,
                     causeId: cause.id, cause, cIdx, causeVarNames, causeDiff, causeAttr, causeBadge, prevVarNames, detVarNames, prevCtrlStrPlain, detCtrlStrPlain, prevCtrlStr, detCtrlStr, hasValidCause, occ, det, rpn, ap, effSev, evalDispPlain, highestClass, dblChar,
                     charObj: null, isProductChar: false,
-                    actId: act.id, act, actIdx, actVarNames, actAttr, actBadge, actDetail,
+                    actId: act.id, act, actIdx, actVarNames, actAttr, actBadge, actDetail, actDiff,
                     hasActiveActionDetail, hasCancelledOnly, hasAnyActionDetail, firstAct, s2, o2, d2, rpn2, ap2, evalDisp2Plain
                   });
                 }
@@ -27240,8 +27280,20 @@ function renderFMEATable(force = false) {
               const detVarNames = getVariantNamesDisplay(detCtrls.map(c => c.variants || c.variantId));
               const prevCtrlStrPlain = prevCtrls.map(c => c.desc).join('; ') || '-';
               const detCtrlStrPlain = detCtrls.map(c => c.desc).join('; ') || '-';
-              const prevCtrlStr = prevCtrls.map(c => `• ${escapeHtml(c.desc)}`).join('<br>') || (isReadOnly ? '-' : '<span class="text-muted">Dbl-click to link</span>');
-              const detCtrlStr = detCtrls.map(c => `• ${escapeHtml(c.desc)}`).join('<br>') || (isReadOnly ? '-' : '<span class="text-muted">Dbl-click to link</span>');
+
+              const formatCharCtrlWithDiff = (c) => {
+                const cDiff = activeComparisonState ? (activeComparisonState.diffMap.causeControls?.get(cause.id + '_' + c.id) || activeComparisonState.diffMap.controls?.get(c.id)) : null;
+                if (cDiff && cDiff.type === 'ADDED') {
+                  return `• <ins style="color:#15803d; text-decoration:none; font-weight:600; background:rgba(34,197,94,0.12); padding:1px 4px; border-radius:3px;">${escapeHtml(c.desc)}</ins> <span style="font-size:9px; background:#dcfce7; color:#15803d; font-weight:700; padding:1px 4px; border-radius:3px; border:1px solid #86efac;">+ ADDED</span>`;
+                }
+                if (cDiff && cDiff.type === 'MODIFIED' && cDiff.oldDesc) {
+                  return `• ${formatInlineDiffText(cDiff.oldDesc, c.desc, 'Control Method')}`;
+                }
+                return `• ${escapeHtml(c.desc)}`;
+              };
+
+              const prevCtrlStr = prevCtrls.map(c => formatCharCtrlWithDiff(c)).join('<br>') || (isReadOnly ? '-' : '<span class="text-muted">Dbl-click to link</span>');
+              const detCtrlStr = detCtrls.map(c => formatCharCtrlWithDiff(c)).join('<br>') || (isReadOnly ? '-' : '<span class="text-muted">Dbl-click to link</span>');
 
               const charActIds = getActionsForCharacteristicOrCause(charObj.id, cause.id);
               const charActions = allActsPool.filter(a => charActIds.includes(a.id) && matchesVariantFilter(a.variants || a.variantId));
@@ -27261,7 +27313,7 @@ function renderFMEATable(force = false) {
                     fmId: fm.id, fm, fmAttr, fmBadge, fmSyncBadge, effectVarNames, effAttr, effBadge, effDiff, maxSeverity, effectsStr,
                     causeId: cause.id, cause, cIdx, causeVarNames, causeDiff, causeAttr, causeBadge, prevVarNames, detVarNames, prevCtrlStrPlain, detCtrlStrPlain, prevCtrlStr, detCtrlStr, hasValidCause, occ, det, rpn, ap, effSev, evalDispPlain, highestClass: charClassDisp, dblChar,
                     charObj: charObj, isProductChar: charObj.isProductChar,
-                    actId: null, act: null,
+                    actId: null, act: null, actDiff: null,
                     hasActiveActionDetail, hasCancelledOnly, hasAnyActionDetail, firstAct, s2, o2, d2, rpn2, ap2, evalDisp2Plain
                   });
                 }
@@ -27269,7 +27321,9 @@ function renderFMEATable(force = false) {
                 charActions.forEach((act, actIdx) => {
                   const actVarNames = getVariantNamesDisplay(act.variants || act.variantId);
                   const actDetail = act.detail ? escapeHtml(act.detail) : (isReadOnly ? '-' : '<span class="text-muted">Dbl-click to link actions</span>');
-                  const actDiff = activeComparisonState ? activeComparisonState.diffMap.actions.get(act.id) : null;
+                  const actDiff = activeComparisonState
+                    ? (activeComparisonState.diffMap.causeActions?.get(cause.id + '_' + act.id) || activeComparisonState.diffMap.actions?.get(act.id) || null)
+                    : null;
                   const actAttr = getDiffCellAttr(actDiff);
                   const actBadge = getDiffBadgeHtml(actDiff);
 
@@ -27282,7 +27336,7 @@ function renderFMEATable(force = false) {
                       fmId: fm.id, fm, fmAttr, fmBadge, fmSyncBadge, effectVarNames, effAttr, effBadge, effDiff, maxSeverity, effectsStr,
                       causeId: cause.id, cause, cIdx, causeVarNames, causeDiff, causeAttr, causeBadge, prevVarNames, detVarNames, prevCtrlStrPlain, detCtrlStrPlain, prevCtrlStr, detCtrlStr, hasValidCause, occ, det, rpn, ap, effSev, evalDispPlain, highestClass: charClassDisp, dblChar,
                       charObj: charObj, isProductChar: charObj.isProductChar,
-                      actId: act.id, act, actIdx, actVarNames, actAttr, actBadge, actDetail,
+                      actId: act.id, act, actIdx, actVarNames, actAttr, actBadge, actDetail, actDiff,
                       hasActiveActionDetail, hasCancelledOnly, hasAnyActionDetail, firstAct, s2, o2, d2, rpn2, ap2, evalDisp2Plain
                     });
                   }
@@ -27417,12 +27471,16 @@ function renderFMEATable(force = false) {
         if (r.fm) {
           const rpnSevStyle = getSeverityColorStyle(r.maxSeverity);
           const rpnSevBadge = getSeverityBadgeHtml(r.maxSeverity);
+          let fmNameDisplay = escapeHtml(stripBadgeArtifacts(r.fm.name));
+          if (r.fmDiff && r.fmDiff.type === 'MODIFIED' && r.fmDiff.oldName) {
+            fmNameDisplay = formatInlineDiffText(stripBadgeArtifacts(r.fmDiff.oldName), stripBadgeArtifacts(r.fm.name), 'Failure Mode');
+          }
           html += `
           <td id="fmea-cell-fm-${r.fmId}" data-struct-id="${r.structNode.id}" data-fl-id="${r.flId}" data-fm-id="${r.fmId}" data-cell-type="fm" title="${isReadOnly ? '' : 'Ctrl + Double-click to edit Failure Mode | '}Variants: ${escapeHtml(r.structVarNames)}" ${r.fmAttr} rowspan="${r.fmRowspan}" class="editable-cell" ${dblClickFm(r.flId, r.fmId)}>
             <div style="display:flex; justify-content:space-between; align-items:center; width:100%; gap:4px;">
               <div style="display:flex; align-items:center; gap:4px;">
                 ${isReadOnly ? '' : `<input type="checkbox" class="copy-select-chk" ${selectedFmCopyIds && selectedFmCopyIds.has(r.fmId) ? 'checked' : ''} onclick="event.stopPropagation();" ondblclick="event.stopPropagation();" onchange="toggleCopySelectFailureMode('${r.flId}', '${r.fmId}', this)" title="Select Failure Mode for Copy / Move">`}
-                <span class="fm-name-text" style="font-weight:600; color:var(--text-primary);">${r.fmBadge}${escapeHtml(stripBadgeArtifacts(r.fm.name))}${r.fmSyncBadge}</span>
+                <span class="fm-name-text" style="font-weight:600; color:var(--text-primary);">${r.fmBadge}${fmNameDisplay}${r.fmSyncBadge}</span>
                 ${r.fm && r.fm.referenceId ? `<span class="badge-ref-sync" onclick="event.stopPropagation()" title="Bi-directional live reference (ID: ${r.fm.referenceId}). Synced across ${getReferenceCountForFailureMode(r.fm)} instances.">🔗 Ref${getReferenceCountForFailureMode(r.fm) > 1 ? ` (${getReferenceCountForFailureMode(r.fm)})` : ''}</span>` : ''}
               </div>
               <div style="display:inline-flex; align-items:center; gap:3px; flex-shrink:0;">
@@ -27444,7 +27502,7 @@ function renderFMEATable(force = false) {
       // Col 6: Cause (Rowspan across all characteristics & actions of this cause)
       if (r.isFirstRowForCause) {
         if (r.cause) {
-          html += `<td data-cell-type="cause" data-fm-id="${r.fmId}" data-cause-id="${r.cause.id}" title="Variants: ${escapeHtml(r.causeVarNames)}" ${r.causeAttr} rowspan="${r.causeRowspan}" class="cell-dbl-click-hint" ${dblCause(r.fmId)}>${r.causeBadge}${renderCauseFormattedCell(r.cause, r.cIdx)}</td>`;
+          html += `<td data-cell-type="cause" data-fm-id="${r.fmId}" data-cause-id="${r.cause.id}" title="Variants: ${escapeHtml(r.causeVarNames)}" ${r.causeAttr} rowspan="${r.causeRowspan}" class="cell-dbl-click-hint" ${dblCause(r.fmId)}>${r.causeBadge}${renderCauseFormattedCell(r.cause, r.cIdx, r.causeDiff)}</td>`;
         } else if (r.fmId) {
           html += `<td title="Variants: ${escapeHtml(r.structVarNames)}" class="cell-dbl-click-hint" ${dblCause(r.fmId)}><span class="text-muted">${isReadOnly ? '-' : 'Double-click to link causes'}</span></td>`;
         } else {
@@ -27485,9 +27543,14 @@ function renderFMEATable(force = false) {
       if (r.isFirstRowForCause) {
         if (r.cause) {
           const rpnOccStyle = getOccurrenceColorStyle(r.cause.occurrence);
+          let occDiffDisp = '';
+          if (r.causeDiff && r.causeDiff.type === 'RATING_CHANGED' && r.causeDiff.prevO !== undefined && r.causeDiff.prevO !== parseInt(r.cause.occurrence)) {
+            occDiffDisp = `<span style="font-size:9.5px; font-weight:bold; margin-right:4px;" title="Previous Occurrence: ${r.causeDiff.prevO} ➔ Current: ${parseInt(r.cause.occurrence)}"><del style="color:#ef4444; text-decoration:line-through; margin-right:2px;">${r.causeDiff.prevO}</del>➔<span style="color:#15803d;">${parseInt(r.cause.occurrence)}</span></span>`;
+          }
           html += `
           <td data-cell-type="occ" data-cause-id="${r.cause.id}" title="Variants: ${escapeHtml(r.causeVarNames)}" ${r.causeDiff && r.causeDiff.type === 'RATING_CHANGED' ? r.causeAttr : ''} rowspan="${r.causeRowspan}" class="fmea-select-cell" style="${rpnOccStyle}">
             ${r.causeDiff && r.causeDiff.type === 'RATING_CHANGED' ? r.causeBadge : ''}
+            ${occDiffDisp}
             ${r.hasValidCause ? `
             <select class="fmea-rating-select" data-cause-id="${r.cause.id}" data-rating-field="occurrence" style="${rpnOccStyle}" ${dis} onpointerdown="ensureRatingOptions(this, 'occurrence', 10)" onfocus="ensureRatingOptions(this, 'occurrence', 10)" onchange="updateCauseRating('${r.cause.id}', 'occurrence', this.value, this)">
               <option value="${parseInt(r.cause.occurrence) || 10}" selected>${parseInt(r.cause.occurrence) || 10}</option>
@@ -27522,9 +27585,14 @@ function renderFMEATable(force = false) {
       if (r.isFirstRowForCause) {
         if (r.cause) {
           const rpnDetStyle = getDetectionColorStyle(r.cause.detection);
+          let detDiffDisp = '';
+          if (r.causeDiff && r.causeDiff.type === 'RATING_CHANGED' && r.causeDiff.prevD !== undefined && r.causeDiff.prevD !== parseInt(r.cause.detection)) {
+            detDiffDisp = `<span style="font-size:9.5px; font-weight:bold; margin-right:4px;" title="Previous Detection: ${r.causeDiff.prevD} ➔ Current: ${parseInt(r.cause.detection)}"><del style="color:#ef4444; text-decoration:line-through; margin-right:2px;">${r.causeDiff.prevD}</del>➔<span style="color:#15803d;">${parseInt(r.cause.detection)}</span></span>`;
+          }
           html += `
           <td data-cell-type="det" data-cause-id="${r.cause.id}" title="Variants: ${escapeHtml(r.causeVarNames)}" ${r.causeDiff && r.causeDiff.type === 'RATING_CHANGED' ? r.causeAttr : ''} rowspan="${r.causeRowspan}" class="fmea-select-cell" style="${rpnDetStyle}">
             ${r.causeDiff && r.causeDiff.type === 'RATING_CHANGED' ? r.causeBadge : ''}
+            ${detDiffDisp}
             ${r.hasValidCause ? `
             <select class="fmea-rating-select" data-cause-id="${r.cause.id}" data-rating-field="detection" style="${rpnDetStyle}" ${dis} onpointerdown="ensureRatingOptions(this, 'detection', 10)" onfocus="ensureRatingOptions(this, 'detection', 10)" onchange="updateCauseRating('${r.cause.id}', 'detection', this.value, this)">
               <option value="${parseInt(r.cause.detection) || 10}" selected>${parseInt(r.cause.detection) || 10}</option>
@@ -27554,11 +27622,35 @@ function renderFMEATable(force = false) {
         };
         const statusStyle = statusColors[actStatus] || 'background:rgba(100,116,139,0.18); color:#cbd5e1; border:1px solid #475569;';
 
+        let actDetailDisp = r.actDetail;
+        let actRespDisp = escapeHtml(r.act.responsible || '-');
+        let actTargetDateDisp = r.act.targetDate || '-';
+        let actStatusDiffDisp = '';
+        let actTakenDisp = escapeHtml(r.act.actionTaken || '-');
+
+        if (r.actDiff && r.actDiff.type === 'MODIFIED') {
+          if (r.actDiff.oldDetail && r.actDiff.oldDetail !== (r.act.detail || '')) {
+            actDetailDisp = formatInlineDiffText(r.actDiff.oldDetail, r.act.detail, 'Action Detail');
+          }
+          if (r.actDiff.oldResponsible && r.actDiff.oldResponsible !== (r.act.responsible || '')) {
+            actRespDisp = formatInlineDiffText(r.actDiff.oldResponsible, r.act.responsible, 'Responsible Person');
+          }
+          if (r.actDiff.oldTargetDate && r.actDiff.oldTargetDate !== (r.act.targetDate || '')) {
+            actTargetDateDisp = formatInlineDiffText(r.actDiff.oldTargetDate, r.act.targetDate, 'Target Date');
+          }
+          if (r.actDiff.oldActionTaken && r.actDiff.oldActionTaken !== (r.act.actionTaken || '')) {
+            actTakenDisp = formatInlineDiffText(r.actDiff.oldActionTaken, r.act.actionTaken, 'Action Taken');
+          }
+          if (r.actDiff.oldStatus && r.actDiff.oldStatus !== actStatus) {
+            actStatusDiffDisp = `<div style="font-size:9px; margin-top:2px; font-weight:bold;" title="Previous Status: &quot;${escapeHtml(r.actDiff.oldStatus)}&quot; ➔ Current: &quot;${escapeHtml(actStatus)}&quot;"><del style="color:#ef4444; text-decoration:line-through; margin-right:2px;">${escapeHtml(r.actDiff.oldStatus)}</del>➔<span style="color:#15803d;">${escapeHtml(actStatus)}</span></div>`;
+          }
+        }
+
         html += `
-        <td data-cell-type="action" data-cause-id="${r.cause ? r.cause.id : ''}" data-char-id="${r.charObj ? r.charObj.id : ''}" data-act-id="${r.act ? r.act.id : ''}" title="Variants: ${escapeHtml(r.actVarNames)}" ${r.actAttr} class="cell-dbl-click-hint" ${actDbl}>${r.actBadge}${(r.act && (r.act.status === 'Cancelled' || r.act.status === 'Discarded')) ? `<span style="text-decoration:line-through; opacity:0.75;" title="Action Cancelled">${r.actDetail}</span>` : r.actDetail}</td>
+        <td data-cell-type="action" data-cause-id="${r.cause ? r.cause.id : ''}" data-char-id="${r.charObj ? r.charObj.id : ''}" data-act-id="${r.act ? r.act.id : ''}" title="Variants: ${escapeHtml(r.actVarNames)}" ${r.actAttr} class="cell-dbl-click-hint" ${actDbl}>${r.actBadge}${(r.act && (r.act.status === 'Cancelled' || r.act.status === 'Discarded')) ? `<span style="text-decoration:line-through; opacity:0.75;" title="Action Cancelled">${actDetailDisp}</span>` : actDetailDisp}</td>
         <td title="Variants: ${escapeHtml(r.actVarNames)}">${r.act.pd || '-'}</td>
-        <td title="Variants: ${escapeHtml(r.actVarNames)}">${escapeHtml(r.act.responsible || '-')}</td>
-        <td title="Variants: ${escapeHtml(r.actVarNames)}">${r.act.targetDate || '-'}</td>
+        <td title="Variants: ${escapeHtml(r.actVarNames)}">${actRespDisp}</td>
+        <td title="Variants: ${escapeHtml(r.actVarNames)}">${actTargetDateDisp}</td>
         <td title="Status: ${escapeHtml(actStatus)} (Click to change)" class="fmea-select-cell col-status-cell">
           <select class="fmea-status-select" data-action-id="${r.act.id}" style="${statusStyle}" ${dis} onchange="updateActionStatus('${r.act.id}', this.value, '${r.cause ? r.cause.id : ''}', this)">
             <option value="Planned" style="background:#0f172a; color:#38bdf8;" ${actStatus === 'Planned' ? 'selected' : ''}>Planned</option>
@@ -27567,8 +27659,9 @@ function renderFMEATable(force = false) {
             <option value="Discarded" style="background:#0f172a; color:#f87171;" ${actStatus === 'Discarded' || actStatus === 'Failed' ? 'selected' : ''}>Discarded</option>
             <option value="Cancelled" style="background:#0f172a; color:#94a3b8;" ${actStatus === 'Cancelled' ? 'selected' : ''}>Cancelled</option>
           </select>
+          ${actStatusDiffDisp}
         </td>
-        <td title="Variants: ${escapeHtml(r.actVarNames)}">${escapeHtml(r.act.actionTaken || '-')} ${r.act.completionDate ? `(${r.act.completionDate})` : ''}</td>`;
+        <td title="Variants: ${escapeHtml(r.actVarNames)}">${actTakenDisp} ${r.act.completionDate ? `(${escapeHtml(r.act.completionDate)})` : ''}</td>`;
       } else {
         html += `
         <td title="Variants: ${escapeHtml(r.structVarNames)}" class="cell-dbl-click-hint" ${actDbl}><span class="text-muted">${isReadOnly ? '-' : (r.cause ? 'Double-click to link actions' : '-')}</span></td>
@@ -32181,16 +32274,21 @@ function activateFmeaTableComparison(revId, fmeaType, pfmeaId) {
 
   const prevRev = sortedScope[revIdx - 1];
 
-  if (!targetRev.changeReport) {
-    targetRev.changeReport = generateRevisionChangeReport(prevRev, targetRev);
-  }
+  // Capture live snapshot if target revision is in progress (un-frozen) or has no snapshotData
+  const curSnapshot = (targetRev.status === 'Frozen' && targetRev.snapshotData)
+    ? targetRev.snapshotData
+    : (typeof captureLiveFmeaSnapshot === 'function' ? captureLiveFmeaSnapshot(targetRev.fmeaType, targetRev.pfmeaId) : targetRev.snapshotData);
+  const targetRevWithSnap = { ...targetRev, snapshotData: curSnapshot };
 
-  const diffMap = buildComparisonDiffMap(prevRev, targetRev);
+  const changeReport = generateRevisionChangeReport(prevRev, targetRevWithSnap);
+  targetRev.changeReport = changeReport;
+
+  const diffMap = buildComparisonDiffMap(prevRev, targetRevWithSnap);
 
   activeComparisonState = {
-    targetRev,
+    targetRev: targetRevWithSnap,
     prevRev,
-    report: targetRev.changeReport,
+    report: changeReport,
     diffMap
   };
 
@@ -32255,13 +32353,81 @@ function openRevisionChangeReportModalFromComparison() {
   openRevisionChangeReportModal(activeComparisonState.targetRev.id, activeComparisonState.targetRev.fmeaType || 'DFMEA', activeComparisonState.targetRev.pfmeaId || '');
 }
 
+function formatInlineDiffText(oldVal, curVal, fieldLabel = '') {
+  if (oldVal === undefined || oldVal === null) oldVal = '';
+  if (curVal === undefined || curVal === null) curVal = '';
+  const oldStr = String(oldVal).trim();
+  const curStr = String(curVal).trim();
+  if (!oldStr && curStr) {
+    return `<span class="inline-diff-added inline-flex items-center gap-1"><ins style="color:#15803d; text-decoration:none; font-weight:600; background:rgba(34,197,94,0.12); padding:1px 4px; border-radius:3px;">${escapeHtml(curStr)}</ins> <span style="font-size:9px; background:#dcfce7; color:#15803d; font-weight:700; padding:1px 4px; border-radius:3px; border:1px solid #86efac;">+ ADDED</span></span>`;
+  }
+  if (oldStr && !curStr) {
+    return `<del style="color:#ef4444; text-decoration:line-through; background:rgba(239,68,68,0.12); padding:1px 4px; border-radius:3px;" title="Previous ${escapeHtml(fieldLabel)}: &quot;${escapeHtml(oldStr)}&quot; (Removed)">${escapeHtml(oldStr)}</del>`;
+  }
+  if (oldStr === curStr) {
+    return escapeHtml(curStr);
+  }
+  const titleTooltip = `Previous ${fieldLabel ? fieldLabel + ': ' : ''}&quot;${oldStr}&quot; ➔ Current: &quot;${curStr}&quot;`;
+  return `<span class="inline-diff-wrapper" title="${escapeHtml(titleTooltip)}" style="cursor:help;"><del style="color:#ef4444; text-decoration:line-through; background:rgba(239,68,68,0.12); padding:1px 4px; border-radius:3px; margin-right:4px;">${escapeHtml(oldStr)}</del><ins style="color:#15803d; text-decoration:none; font-weight:600; background:rgba(34,197,94,0.12); padding:1px 4px; border-radius:3px;">${escapeHtml(curStr)}</ins></span>`;
+}
+window.formatInlineDiffText = formatInlineDiffText;
+
+function captureLiveFmeaSnapshot(fmeaType, pfmeaId) {
+  const dfmeaSnapshot = {
+    structure: JSON.parse(JSON.stringify(fmeaData.structure || [])),
+    functions: JSON.parse(JSON.stringify(fmeaData.functions || [])),
+    requirements: JSON.parse(JSON.stringify(fmeaData.requirements || [])),
+    functionLines: JSON.parse(JSON.stringify(fmeaData.functionLines || [])),
+    libraries: JSON.parse(JSON.stringify(fmeaData.libraries || {})),
+    failureModeEffects: JSON.parse(JSON.stringify(fmeaData.failureModeEffects || {})),
+    failureModeCauses: JSON.parse(JSON.stringify(fmeaData.failureModeCauses || {})),
+    causeControls: JSON.parse(JSON.stringify(fmeaData.causeControls || {})),
+    causeActions: JSON.parse(JSON.stringify(fmeaData.causeActions || {})),
+    characteristicControls: JSON.parse(JSON.stringify(fmeaData.characteristicControls || {})),
+    characteristicActions: JSON.parse(JSON.stringify(fmeaData.characteristicActions || {})),
+    failureNetworkLinks: JSON.parse(JSON.stringify(fmeaData.failureNetworkLinks || []))
+  };
+
+  if (fmeaType === 'PFMEA' && pfmeaId) {
+    const pfmea = (fmeaData.pfmeas || []).find(p => p.id === pfmeaId);
+    return {
+      dfmea: dfmeaSnapshot,
+      pfmea: pfmea ? JSON.parse(JSON.stringify({
+        id: pfmea.id,
+        name: pfmea.name,
+        processSteps: pfmea.processSteps || [],
+        functions: pfmea.functions || [],
+        requirements: pfmea.requirements || [],
+        functionLines: pfmea.functionLines || [],
+        functionRequirements: pfmea.functionRequirements || {},
+        failureModeEffects: pfmea.failureModeEffects || {},
+        failureModeCauses: pfmea.failureModeCauses || {},
+        causeControls: pfmea.causeControls || {},
+        causeActions: pfmea.causeActions || {},
+        characteristicControls: pfmea.characteristicControls || {},
+        characteristicActions: pfmea.characteristicActions || {},
+        failureNetworkLinks: pfmea.failureNetworkLinks || [],
+        libraries: pfmea.libraries || null,
+        dfmeaSourceConfig: pfmea.dfmeaSourceConfig || null
+      })) : null
+    };
+  }
+  return dfmeaSnapshot;
+}
+window.captureLiveFmeaSnapshot = captureLiveFmeaSnapshot;
+
 function getDiffCellAttr(diffObj) {
   if (!diffObj) return '';
   if (diffObj.type === 'ADDED') {
     return 'style="background-color: #dcfce7 !important; border-left: 4px solid #16a34a !important;" title="Added item in this revision"';
   }
   if (diffObj.type === 'MODIFIED' || diffObj.type === 'SEVERITY_CHANGED' || diffObj.type === 'RATING_CHANGED') {
-    return 'style="background-color: #fef9c3 !important; border-left: 4px solid #ca8a04 !important;" title="Updated item in this revision"';
+    let tooltip = 'Updated item in this revision';
+    if (diffObj.oldCauseName) tooltip = `Previous Cause: "${diffObj.oldCauseName}"`;
+    else if (diffObj.oldName) tooltip = `Previous: "${diffObj.oldName}"`;
+    else if (diffObj.oldDesc) tooltip = `Previous: "${diffObj.oldDesc}"`;
+    else if (diffObj.oldDetails) tooltip = `Previous: "${diffObj.oldDetails}"`;
+    return `style="background-color: #fef9c3 !important; border-left: 4px solid #ca8a04 !important;" title="${escapeHtml(tooltip)}"`;
   }
   return '';
 }
@@ -32279,8 +32445,8 @@ function getDiffBadgeHtml(diffObj) {
   }
   if (diffObj.type === 'RATING_CHANGED') {
     let parts = [];
-    if (diffObj.prevO !== diffObj.curO) parts.push(`O:${diffObj.prevO}➔${diffObj.curO}`);
-    if (diffObj.prevD !== diffObj.curD) parts.push(`D:${diffObj.prevD}➔${diffObj.curD}`);
+    if (diffObj.prevO !== undefined && diffObj.prevO !== diffObj.curO) parts.push(`O:${diffObj.prevO}➔${diffObj.curO}`);
+    if (diffObj.prevD !== undefined && diffObj.prevD !== diffObj.curD) parts.push(`D:${diffObj.prevD}➔${diffObj.curD}`);
     return `<span class="badge" style="background:#d97706; color:#fff; font-size:9px; padding:1px 5px; border-radius:3px; margin-right:4px; font-weight:bold;">⚡ ${parts.join(' ')}</span>`;
   }
   return '';
@@ -32297,7 +32463,11 @@ function buildComparisonDiffMap(prevRev, curRev) {
     failureModes: new Map(),
     effects: new Map(),
     causes: new Map(),
+    fmCauses: new Map(),
+    controls: new Map(),
+    causeControls: new Map(),
     actions: new Map(),
+    causeActions: new Map(),
     deleted: {
       structures: [],
       functions: [],
@@ -32405,7 +32575,7 @@ function buildComparisonDiffMap(prevRev, curRev) {
     if (!curEffMap.has(e.id)) diffMap.deleted.effects.push(e);
   });
 
-  // 6. Causes
+  // 6. Causes (Global)
   const prevCauseMap = new Map((prevEnt.causes || []).map(c => [c.id, c]));
   const curCauseMap = new Map((curEnt.causes || []).map(c => [c.id, c]));
 
@@ -32418,11 +32588,13 @@ function buildComparisonDiffMap(prevRev, curRev) {
       const curO = parseInt(c.occurrence) || 1;
       const prevD = parseInt(prevC.detection) || 1;
       const curD = parseInt(c.detection) || 1;
+      const prevDetails = (prevC.details || prevC.name || prevC.desc || '').trim();
+      const curDetails = (c.details || c.name || c.desc || '').trim();
 
       if (prevO !== curO || prevD !== curD) {
-        diffMap.causes.set(c.id, { type: 'RATING_CHANGED', prevO, curO, prevD, curD });
-      } else if (prevC.details !== c.details) {
-        diffMap.causes.set(c.id, { type: 'MODIFIED', oldDetails: prevC.details });
+        diffMap.causes.set(c.id, { type: 'RATING_CHANGED', prevO, curO, prevD, curD, oldDetails: prevDetails, oldCauseName: prevDetails });
+      } else if (prevDetails !== curDetails) {
+        diffMap.causes.set(c.id, { type: 'MODIFIED', oldDetails: prevDetails, oldCauseName: prevDetails });
       }
     }
   });
@@ -32430,7 +32602,92 @@ function buildComparisonDiffMap(prevRev, curRev) {
     if (!curCauseMap.has(c.id)) diffMap.deleted.causes.push(c);
   });
 
-  // 7. Actions
+  // 6b. Failure Mode Linked Causes (detects when linked causes are added, swapped, or changed on a Failure Mode)
+  const prevFmCauses = prevEnt.failureModeCauses || {};
+  const curFmCauses = curEnt.failureModeCauses || {};
+
+  (curEnt.failureModes || []).forEach(fm => {
+    const curLinked = curFmCauses[fm.id] || [];
+    const prevLinked = prevFmCauses[fm.id] || [];
+
+    curLinked.forEach(cId => {
+      const key = fm.id + '_' + cId;
+      const curCauseObj = curCauseMap.get(cId) || (curEnt.causes || []).find(c => c.id === cId);
+      if (!prevLinked.includes(cId)) {
+        // Linked cause changed or added
+        if (prevLinked.length === 1 && curLinked.length === 1) {
+          const oldCauseId = prevLinked[0];
+          const oldCauseObj = prevCauseMap.get(oldCauseId) || (prevEnt.causes || []).find(c => c.id === oldCauseId);
+          const oldName = oldCauseObj ? (oldCauseObj.details || oldCauseObj.name || oldCauseObj.desc || '') : '';
+          const prevO = oldCauseObj ? (parseInt(oldCauseObj.occurrence) || 1) : 1;
+          const curO = curCauseObj ? (parseInt(curCauseObj.occurrence) || 1) : 1;
+          const prevD = oldCauseObj ? (parseInt(oldCauseObj.detection) || 1) : 1;
+          const curD = curCauseObj ? (parseInt(curCauseObj.detection) || 1) : 1;
+          diffMap.fmCauses.set(key, {
+            type: 'MODIFIED',
+            oldCauseName: oldName,
+            oldDetails: oldName,
+            prevO,
+            curO,
+            prevD,
+            curD,
+            isSwappedCause: true
+          });
+        } else {
+          diffMap.fmCauses.set(key, { type: 'ADDED' });
+        }
+      } else {
+        const prevCauseObj = prevCauseMap.get(cId);
+        if (prevCauseObj && curCauseObj) {
+          const prevO = parseInt(prevCauseObj.occurrence) || 1;
+          const curO = parseInt(curCauseObj.occurrence) || 1;
+          const prevD = parseInt(prevCauseObj.detection) || 1;
+          const curD = parseInt(curCauseObj.detection) || 1;
+          const prevDetails = (prevCauseObj.details || prevCauseObj.name || prevCauseObj.desc || '').trim();
+          const curDetails = (curCauseObj.details || curCauseObj.name || curCauseObj.desc || '').trim();
+
+          if (prevDetails !== curDetails) {
+            diffMap.fmCauses.set(key, { type: 'MODIFIED', oldDetails: prevDetails, oldCauseName: prevDetails, prevO, curO, prevD, curD });
+          } else if (prevO !== curO || prevD !== curD) {
+            diffMap.fmCauses.set(key, { type: 'RATING_CHANGED', prevO, curO, prevD, curD });
+          }
+        }
+      }
+    });
+  });
+
+  // 7. Controls (Global & Cause-Linked)
+  const prevCtrlMap = new Map((prevEnt.controls || []).map(c => [c.id, c]));
+  const curCtrlMap = new Map((curEnt.controls || []).map(c => [c.id, c]));
+
+  (curEnt.controls || []).forEach(ctrl => {
+    if (!prevCtrlMap.has(ctrl.id)) {
+      diffMap.controls.set(ctrl.id, { type: 'ADDED' });
+    } else {
+      const prevCtrl = prevCtrlMap.get(ctrl.id);
+      const prevDesc = (prevCtrl.desc || prevCtrl.name || '').trim();
+      const curDesc = (ctrl.desc || ctrl.name || '').trim();
+      if (prevDesc !== curDesc || prevCtrl.type !== ctrl.type) {
+        diffMap.controls.set(ctrl.id, { type: 'MODIFIED', oldDesc: prevDesc, oldType: prevCtrl.type });
+      }
+    }
+  });
+
+  Object.keys(curEnt.causeControls || {}).forEach(causeId => {
+    const curLinked = curEnt.causeControls[causeId] || [];
+    const prevLinked = (prevEnt.causeControls || {})[causeId] || [];
+    curLinked.forEach(ctrlId => {
+      const key = causeId + '_' + ctrlId;
+      if (!prevLinked.includes(ctrlId)) {
+        diffMap.causeControls.set(key, { type: 'ADDED' });
+      } else {
+        const cDiff = diffMap.controls.get(ctrlId);
+        if (cDiff) diffMap.causeControls.set(key, cDiff);
+      }
+    });
+  });
+
+  // 8. Actions (Global & Cause-Linked)
   const prevActMap = new Map((prevEnt.actions || []).map(a => [a.id, a]));
   const curActMap = new Map((curEnt.actions || []).map(a => [a.id, a]));
 
@@ -32439,13 +32696,40 @@ function buildComparisonDiffMap(prevRev, curRev) {
       diffMap.actions.set(a.id, { type: 'ADDED' });
     } else {
       const prevA = prevActMap.get(a.id);
-      if (prevA.detail !== a.detail || prevA.responsible !== a.responsible || prevA.actionTaken !== a.actionTaken || prevA.completionDate !== a.completionDate) {
-        diffMap.actions.set(a.id, { type: 'MODIFIED' });
+      const isDetailDiff = (prevA.detail || '') !== (a.detail || '');
+      const isRespDiff = (prevA.responsible || '') !== (a.responsible || '');
+      const isDateDiff = (prevA.targetDate || '') !== (a.targetDate || '');
+      const isTakenDiff = (prevA.actionTaken || '') !== (a.actionTaken || '') || (prevA.completionDate || '') !== (a.completionDate || '');
+      const isStatusDiff = (prevA.status || '') !== (a.status || '');
+      if (isDetailDiff || isRespDiff || isDateDiff || isTakenDiff || isStatusDiff) {
+        diffMap.actions.set(a.id, {
+          type: 'MODIFIED',
+          oldDetail: prevA.detail,
+          oldResponsible: prevA.responsible,
+          oldTargetDate: prevA.targetDate,
+          oldActionTaken: prevA.actionTaken,
+          oldCompletionDate: prevA.completionDate,
+          oldStatus: prevA.status
+        });
       }
     }
   });
   (prevEnt.actions || []).forEach(a => {
     if (!curActMap.has(a.id)) diffMap.deleted.actions.push(a);
+  });
+
+  Object.keys(curEnt.causeActions || {}).forEach(causeId => {
+    const curLinked = curEnt.causeActions[causeId] || [];
+    const prevLinked = (prevEnt.causeActions || {})[causeId] || [];
+    curLinked.forEach(actId => {
+      const key = causeId + '_' + actId;
+      if (!prevLinked.includes(actId)) {
+        diffMap.causeActions.set(key, { type: 'ADDED' });
+      } else {
+        const aDiff = diffMap.actions.get(actId);
+        if (aDiff) diffMap.causeActions.set(key, aDiff);
+      }
+    });
   });
 
   return diffMap;
@@ -32477,13 +32761,27 @@ function extractSnapshotEntities(snapshot, fmeaType) {
   let reqs = [];
   let funcLines = [];
   let libs = { effects: [], causes: [], controls: [], actions: [] };
+  let fmCauses = {};
+  let fmEffects = {};
+  let causeControls = {};
+  let causeActions = {};
+  let charControls = {};
+  let charActions = {};
+  let failureNetworkLinks = [];
 
   if (isPFMEA && snapshot.pfmea) {
     structNodes = getFlatNodes(snapshot.pfmea.processSteps || snapshot.pfmea.structure);
     funcs = snapshot.pfmea.functions || [];
     reqs = snapshot.pfmea.requirements || [];
     funcLines = snapshot.pfmea.functionLines || [];
-    libs = (snapshot.dfmea && snapshot.dfmea.libraries) || fmeaData.libraries || {};
+    libs = (snapshot.pfmea.libraries) || (snapshot.dfmea && snapshot.dfmea.libraries) || fmeaData.libraries || {};
+    fmCauses = snapshot.pfmea.failureModeCauses || (snapshot.dfmea && snapshot.dfmea.failureModeCauses) || {};
+    fmEffects = snapshot.pfmea.failureModeEffects || (snapshot.dfmea && snapshot.dfmea.failureModeEffects) || {};
+    causeControls = snapshot.pfmea.causeControls || (snapshot.dfmea && snapshot.dfmea.causeControls) || {};
+    causeActions = snapshot.pfmea.causeActions || (snapshot.dfmea && snapshot.dfmea.causeActions) || {};
+    charControls = snapshot.pfmea.characteristicControls || (snapshot.dfmea && snapshot.dfmea.characteristicControls) || {};
+    charActions = snapshot.pfmea.characteristicActions || (snapshot.dfmea && snapshot.dfmea.characteristicActions) || {};
+    failureNetworkLinks = snapshot.pfmea.failureNetworkLinks || (snapshot.dfmea && snapshot.dfmea.failureNetworkLinks) || [];
   } else {
     const snap = snapshot.dfmea || snapshot;
     structNodes = getFlatNodes(snap.structure);
@@ -32491,6 +32789,13 @@ function extractSnapshotEntities(snapshot, fmeaType) {
     reqs = snap.requirements || [];
     funcLines = snap.functionLines || [];
     libs = snap.libraries || {};
+    fmCauses = snap.failureModeCauses || {};
+    fmEffects = snap.failureModeEffects || {};
+    causeControls = snap.causeControls || {};
+    causeActions = snap.causeActions || {};
+    charControls = snap.characteristicControls || {};
+    charActions = snap.characteristicActions || {};
+    failureNetworkLinks = snap.failureNetworkLinks || [];
   }
 
   const fms = [];
@@ -32507,7 +32812,14 @@ function extractSnapshotEntities(snapshot, fmeaType) {
     effects: libs.effects || [],
     causes: libs.causes || [],
     controls: libs.controls || [],
-    actions: libs.actions || []
+    actions: libs.actions || [],
+    failureModeCauses: fmCauses,
+    failureModeEffects: fmEffects,
+    causeControls,
+    causeActions,
+    characteristicControls: charControls,
+    characteristicActions: charActions,
+    failureNetworkLinks
   };
 }
 
@@ -32716,6 +33028,30 @@ function generateRevisionChangeReport(prevRev, curRev) {
       report.changes.causes.push({ type: 'DELETED', text: `Removed Failure Cause: "${c.details}"` });
       report.stats.totalDeleted++;
     }
+  });
+
+  // 5b. Cause Linkages per Failure Mode
+  const prevFmCauses = prevEnt.failureModeCauses || {};
+  const curFmCauses = curEnt.failureModeCauses || {};
+  (curEnt.failureModes || []).forEach(fm => {
+    const curLinked = curFmCauses[fm.id] || [];
+    const prevLinked = prevFmCauses[fm.id] || [];
+    curLinked.forEach(cId => {
+      if (!prevLinked.includes(cId)) {
+        const cObj = curCauseMap.get(cId) || (curEnt.causes || []).find(c => c.id === cId);
+        const cDesc = cObj ? (cObj.details || cObj.name || cId) : cId;
+        report.changes.causes.push({ type: 'ADDED', text: `Linked Failure Cause to FM "${fm.name}": "${cDesc}"` });
+        report.stats.totalAdded++;
+      }
+    });
+    prevLinked.forEach(cId => {
+      if (!curLinked.includes(cId)) {
+        const cObj = prevCauseMap.get(cId) || (prevEnt.causes || []).find(c => c.id === cId);
+        const cDesc = cObj ? (cObj.details || cObj.name || cId) : cId;
+        report.changes.causes.push({ type: 'DELETED', text: `Unlinked Failure Cause from FM "${fm.name}": "${cDesc}"` });
+        report.stats.totalDeleted++;
+      }
+    });
   });
 
   // 6. Actions (Optimization Deltas)
@@ -75048,8 +75384,9 @@ function renderControlPlanTable() {
               ${escapeHtml(group.opNo)}
             </td>
             <!-- Col 2: Process Name / Operation -->
-            <td rowspan="${totalOpRows}" style="padding:6px 8px; vertical-align:top; border:1px solid #334155; font-weight:700; color:#f8fafc; background:#0f172a;">
+            <td rowspan="${totalOpRows}" style="padding:6px 8px; vertical-align:top; border:1px solid #334155; font-weight:700; color:#f8fafc; background:${fieldDiffs.opName ? 'rgba(234,179,8,0.2)' : '#0f172a'};">
               <div>${escapeHtml(group.opName)}</div>
+              ${fieldDiffs.opName ? `<div style="font-size:9px; color:#fde047; font-weight:700; margin-top:2px;" title="Previous Process Name: &quot;${escapeHtml(fieldDiffs.opName.old)}&quot; ➔ Current: &quot;${escapeHtml(fieldDiffs.opName.new)}&quot;"><span style="text-decoration:line-through; color:#fca5a5;">${escapeHtml(fieldDiffs.opName.old || '-')}</span> ➔ <span style="color:#86efac;">${escapeHtml(fieldDiffs.opName.new || '-')}</span></div>` : ''}
               ${group.elementPartNo ? `<div style="font-size:9.5px; color:#94a3b8; margin-top:2px;">[${escapeHtml(group.elementPartNo)}]</div>` : ''}
             </td>
           ` : ''}
@@ -75070,14 +75407,16 @@ function renderControlPlanTable() {
             </td>
 
             <!-- Col 5: Product Characteristic -->
-            <td rowspan="${charRowSpan}" style="padding:6px 8px; vertical-align:top; border:1px solid #334155; color:#e2e8f0;">
+            <td rowspan="${charRowSpan}" style="padding:6px 8px; vertical-align:top; border:1px solid #334155; color:#e2e8f0; background:${fieldDiffs.productChar ? 'rgba(234,179,8,0.2)' : 'transparent'};">
               ${row.productChar !== '-' ? `<span>🎨 ${escapeHtml(row.productChar)}</span>` : '<span style="color:#64748b;">-</span>'}
+              ${fieldDiffs.productChar ? `<div style="font-size:9px; color:#fde047; font-weight:700; margin-top:2px;" title="Previous Product Characteristic: &quot;${escapeHtml(fieldDiffs.productChar.old)}&quot; ➔ Current: &quot;${escapeHtml(fieldDiffs.productChar.new)}&quot;"><span style="text-decoration:line-through; color:#fca5a5;">${escapeHtml(fieldDiffs.productChar.old || '-')}</span> ➔ <span style="color:#86efac;">${escapeHtml(fieldDiffs.productChar.new || '-')}</span></div>` : ''}
               ${isAdded ? '<span style="background:rgba(34,197,94,0.3); color:#4ade80; border:1px solid #22c55e; font-size:9px; padding:1px 4px; border-radius:3px; font-weight:800; margin-left:4px;">+ ADDED</span>' : ''}
             </td>
 
             <!-- Col 6: Process Characteristic -->
-            <td rowspan="${charRowSpan}" style="padding:6px 8px; vertical-align:top; border:1px solid #334155; color:#e2e8f0;">
+            <td rowspan="${charRowSpan}" style="padding:6px 8px; vertical-align:top; border:1px solid #334155; color:#e2e8f0; background:${fieldDiffs.processChar ? 'rgba(234,179,8,0.2)' : 'transparent'};">
               ${row.processChar !== '-' ? `<span>⚙️ ${escapeHtml(row.processChar)}</span>` : '<span style="color:#64748b;">-</span>'}
+              ${fieldDiffs.processChar ? `<div style="font-size:9px; color:#fde047; font-weight:700; margin-top:2px;" title="Previous Process Characteristic: &quot;${escapeHtml(fieldDiffs.processChar.old)}&quot; ➔ Current: &quot;${escapeHtml(fieldDiffs.processChar.new)}&quot;"><span style="text-decoration:line-through; color:#fca5a5;">${escapeHtml(fieldDiffs.processChar.old || '-')}</span> ➔ <span style="color:#86efac;">${escapeHtml(fieldDiffs.processChar.new || '-')}</span></div>` : ''}
             </td>
 
             <!-- Col 7: Special Class -->
@@ -75094,13 +75433,15 @@ function renderControlPlanTable() {
           ` : ''}
 
           <!-- Col 9: Control Method (Prevention) -->
-          <td style="padding:6px 8px; vertical-align:top; border:1px solid #334155; color:#f1f5f9;">
+          <td style="padding:6px 8px; vertical-align:top; border:1px solid #334155; color:#f1f5f9; background:${fieldDiffs.prevCtrl ? 'rgba(234,179,8,0.2)' : 'transparent'};">
             ${prevHtml}
+            ${fieldDiffs.prevCtrl ? `<div style="font-size:9px; color:#fde047; font-weight:700; margin-top:2px;" title="Previous Prevention Control: &quot;${escapeHtml(fieldDiffs.prevCtrl.old)}&quot; ➔ Current: &quot;${escapeHtml(fieldDiffs.prevCtrl.new)}&quot;"><span style="text-decoration:line-through; color:#fca5a5;">${escapeHtml(fieldDiffs.prevCtrl.old || '-')}</span> ➔ <span style="color:#86efac;">${escapeHtml(fieldDiffs.prevCtrl.new || '-')}</span></div>` : ''}
           </td>
 
           <!-- Col 10: Evaluation Method (Detection) -->
-          <td style="padding:6px 8px; vertical-align:top; border:1px solid #334155; color:#f1f5f9;">
+          <td style="padding:6px 8px; vertical-align:top; border:1px solid #334155; color:#f1f5f9; background:${fieldDiffs.detCtrl ? 'rgba(234,179,8,0.2)' : 'transparent'};">
             ${detHtml}
+            ${fieldDiffs.detCtrl ? `<div style="font-size:9px; color:#fde047; font-weight:700; margin-top:2px;" title="Previous Detection Control: &quot;${escapeHtml(fieldDiffs.detCtrl.old)}&quot; ➔ Current: &quot;${escapeHtml(fieldDiffs.detCtrl.new)}&quot;"><span style="text-decoration:line-through; color:#fca5a5;">${escapeHtml(fieldDiffs.detCtrl.old || '-')}</span> ➔ <span style="color:#86efac;">${escapeHtml(fieldDiffs.detCtrl.new || '-')}</span></div>` : ''}
           </td>
 
           <!-- Col 11: Sample Size (Editable per Control Line) -->
@@ -76348,6 +76689,17 @@ function buildControlPlanComparisonDiffMap(prevRev, curRev) {
       if (p.sampleFreq !== r.sampleFreq) fieldDiffs.sampleFreq = { old: p.sampleFreq, new: r.sampleFreq };
       if (p.evaluator !== r.evaluator) fieldDiffs.evaluator = { old: p.evaluator, new: r.evaluator };
       if (p.reactionPlan !== r.reactionPlan) fieldDiffs.reactionPlan = { old: p.reactionPlan, new: r.reactionPlan };
+      if (p.productChar !== r.productChar) fieldDiffs.productChar = { old: p.productChar, new: r.productChar };
+      if (p.processChar !== r.processChar) fieldDiffs.processChar = { old: p.processChar, new: r.processChar };
+      if (p.opName !== r.opName) fieldDiffs.opName = { old: p.opName, new: r.opName };
+
+      const pPrev = p.prevCtrl ? p.prevCtrl.desc : (p.prevControls ? p.prevControls.map(c => c.desc).join('; ') : '');
+      const rPrev = r.prevCtrl ? r.prevCtrl.desc : (r.prevControls ? r.prevControls.map(c => c.desc).join('; ') : '');
+      if (pPrev !== rPrev) fieldDiffs.prevCtrl = { old: pPrev, new: rPrev };
+
+      const pDet = p.detCtrl ? p.detCtrl.desc : (p.detControls ? p.detControls.map(c => c.desc).join('; ') : '');
+      const rDet = r.detCtrl ? r.detCtrl.desc : (r.detControls ? r.detControls.map(c => c.desc).join('; ') : '');
+      if (pDet !== rDet) fieldDiffs.detCtrl = { old: pDet, new: rDet };
 
       if (Object.keys(fieldDiffs).length > 0) {
         diffMap.lines.set(key, { type: 'MODIFIED', fieldDiffs });

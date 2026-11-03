@@ -1166,25 +1166,29 @@ if (typeof global !== 'undefined') {
   global.formatCleanCellText = formatCleanCellText;
 } function formatAPBadge(s, occ, det, isVDA, classSymbol = '') {
   if (typeof formatRPNBadgeHTML === 'function') {
-    return formatRPNBadgeHTML(s, occ, det, isVDA);
+    return formatRPNBadgeHTML(s, occ, det, isVDA, classSymbol);
   }
   const sNum = parseInt(s) || 1;
   const oNum = parseInt(occ) || 1;
   const dNum = parseInt(det) || 1;
   const rpnVal = sNum * oNum * dNum;
   if (isVDA) {
-    let apVal = 'Low (L)';
-    if (sNum >= 9 || rpnVal >= 100) apVal = 'High (H)';
-    else if (sNum >= 7 || rpnVal >= 50) apVal = 'Medium (M)';
+    const rawAp = typeof calculateAIAGVDA_AP === 'function'
+      ? calculateAIAGVDA_AP(sNum, oNum, dNum, classSymbol)
+      : (typeof computeAP === 'function' ? computeAP(sNum, oNum, dNum, classSymbol) : 'L');
+    const apVal = (rawAp === 'H' ? 'H' : (rawAp === 'M' ? 'M' : 'L'));
     let bg = '#dcfce7', color = '#166534', border = '#86efac';
-    if (apVal.startsWith('High') || apVal.includes('(H)')) {
+    if (apVal === 'H') {
       bg = '#fee2e2'; color = '#991b1b'; border = '#f87171';
-    } else if (apVal.startsWith('Medium') || apVal.includes('(M)')) {
+    } else if (apVal === 'M') {
       bg = '#fef3c7'; color = '#92400e'; border = '#fbbf24';
     }
-    return `<span style="background:${bg} !important; color:${color} !important; border:1px solid ${border} !important; font-weight:bold; padding:2px 5px; border-radius:4px; font-size:10px; display:inline-block; -webkit-print-color-adjust:exact;">${apVal}</span>`;
+    return `<span style="background:${bg} !important; color:${color} !important; border:1px solid ${border} !important; font-weight:800; padding:2px 6px; border-radius:3px; font-size:10px; display:inline-block; -webkit-print-color-adjust:exact; print-color-adjust:exact;">${apVal}</span>`;
   }
-  return `<span style="font-weight:bold; padding:2px 5px; border-radius:4px; font-size:10px; display:inline-block;">${rpnVal}</span>`;
+  const risk = typeof getAIAGRiskClassification === 'function'
+    ? getAIAGRiskClassification(sNum, rpnVal)
+    : { bg: '#dcfce7', text: '#166534', border: '#86efac' };
+  return `<span style="background:${risk.bg} !important; color:${risk.text} !important; border:1px solid ${risk.border} !important; font-weight:bold; padding:2px 5px; border-radius:4px; font-size:10px; display:inline-block; -webkit-print-color-adjust:exact; print-color-adjust:exact;">${rpnVal}</span>`;
 }
 if (typeof window !== 'undefined') {
   window.formatAPBadge = formatAPBadge;
@@ -13864,6 +13868,8 @@ function onFuncStructChange() {
   const structId = select.value;
   if (!structId) return;
 
+  selectedStructureId = structId;
+
   // Render direct functions (without checkbox toggle; direct functions are inherently defined for element)
   const directContainer = document.getElementById('directFunctionsList');
   const directFuncs = (ctx.functions || []).filter(f => f.structId === structId);
@@ -14089,8 +14095,34 @@ function saveNewFunctionToStructure(e) {
       targetReqs[flId] = [];
     }
 
+    selectedStructureId = structId;
+
+    const checkedParentFuncIds = [];
+    document.querySelectorAll('#parentFunctionsList input[type="checkbox"]:checked').forEach(chk => {
+      const pId = chk.id.replace('chk_func_', '');
+      if (pId) checkedParentFuncIds.push(pId);
+    });
+
+    checkedParentFuncIds.forEach(pfId => {
+      let existingLine = targetLines.find(fl => String(fl.structId) === String(structId) && (String(fl.funcId) === String(pfId) || String(fl.functionId) === String(pfId)));
+      if (!existingLine) {
+        const flId = 'fl-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
+        targetLines.push({
+          id: flId,
+          structId: structId,
+          funcId: pfId,
+          isConsidered: true,
+          failureModes: []
+        });
+        targetReqs[flId] = targetReqs[flId] || [];
+      } else {
+        existingLine.isConsidered = true;
+      }
+    });
+
     if (typeof markDataChanged === 'function') markDataChanged('Function Created');
     window._fmeaDataDirty = true;
+    if (typeof saveProjectToLocalStorage === 'function') saveProjectToLocalStorage();
     closeModal('createFunctionModal');
     onFuncStructChange();
   }
@@ -14134,9 +14166,15 @@ function saveFunctionSelections() {
     }
   });
 
+  selectedStructureId = structId;
   if (typeof markDataChanged === 'function') markDataChanged('Functions Updated');
   window._fmeaDataDirty = true;
+  if (typeof saveProjectToLocalStorage === 'function') saveProjectToLocalStorage();
+  if (typeof renderFMEATable === 'function') renderFMEATable();
   closeModal('functionModal');
+  if (typeof showToast === 'function') {
+    showToast("Functions and Parent Function linkages updated successfully.", "success");
+  }
 }
 
 // ----------------------------------------------------
@@ -15538,6 +15576,7 @@ function populateEffectSystemDropdown() {
     }
   }
 
+  // ONLY show higher elements in its hierarchy (ancestors) + Main Effect Node
   const ancestors = activeStructId ? getAncestorsOfStructureNode(activeStructId) : [];
 
   let html = `<option value="main-effect-node">🌐 Main Effect Node (Highest Level / Custom System)</option>`;
@@ -15549,20 +15588,6 @@ function populateEffectSystemDropdown() {
       html += `<option value="${node.id}">📁 ${escapeHtml(node.partNo ? node.partNo + ' - ' + node.name : node.name)}</option>`;
     }
   });
-
-  function addAllStructNodes(node) {
-    if (!node) return;
-    if (node.id && !addedIds.has(String(node.id))) {
-      addedIds.add(String(node.id));
-      html += `<option value="${node.id}">📁 ${escapeHtml(node.partNo ? node.partNo + ' - ' + node.name : node.name)}</option>`;
-    }
-    if (node.children && Array.isArray(node.children)) {
-      node.children.forEach(addAllStructNodes);
-    }
-  }
-  if (fmeaData.structure) {
-    addAllStructNodes(fmeaData.structure);
-  }
 
   systemSel.innerHTML = html;
   systemSel.selectedIndex = 0;
@@ -15863,10 +15888,16 @@ function renderEffectsLibraryList() {
       return false;
     }
 
-    // In DFMEA mode, enforce strict ancestor chain (ancestorStructIds or main-effect-node)
+        // In DFMEA mode, strictly show ONLY higher elements in its hierarchy (ancestors) or Main Effect Node
     if (!ctx.isPFMEA) {
-      if (eff.structId && eff.structId !== 'main-effect-node') {
-        if (!ancestorStructIds.includes(String(eff.structId)) && !(ctx.structure && (String(eff.structId) === String(ctx.structure.id) || String(eff.systemId) === String(ctx.structure.id)))) {
+      const isMain = (!eff.structId && !eff.dfmeaFmId) ||
+        (eff.systemId === 'main-effect-node') ||
+        (eff.structId === 'main-effect-node') ||
+        ((eff.systemName || '').includes('Main Effect') || (eff.systemName || '').includes('Global'));
+
+      if (!isMain) {
+        const effStructId = String(eff.structId || eff.systemId || '');
+        if (!effStructId || !ancestorStructIds.includes(effStructId)) {
           return false;
         }
       }
@@ -17741,6 +17772,9 @@ function getStructIdForFailureMode(fmId) {
     if (fl.failureModes && fl.failureModes.some(fm => fm.id === fmId)) {
       return fl.structId;
     }
+    if (fl.failureModeId === fmId) {
+      return fl.structId;
+    }
   }
   return selectedStructureId || null;
 }
@@ -17801,11 +17835,72 @@ function resetCauseForm() {
 }
 
 window.activeCauseChainFilter = 'ALL';
+window._currentLowerFmMap = {};
+
 function setCauseChainOrderFilter(structId) {
   window.activeCauseChainFilter = structId || 'ALL';
   renderCausesLibraryList();
 }
 window.setCauseChainOrderFilter = setCauseChainOrderFilter;
+
+function onCauseTargetElementChange(targetId) {
+  const ctx = getActiveFmeaData();
+  const activeStructId = getStructIdForFailureMode(activeFailureModeId);
+  const targetNode = getStructureNodeById(ctx.structure, targetId);
+  const sysElemInput = document.getElementById('causeSystemElement');
+  const funcInput = document.getElementById('causeFunction');
+
+  const isFocus = (String(targetId) === String(activeStructId));
+  if (sysElemInput) {
+    sysElemInput.value = isFocus ? 'Characteristics' : (targetNode ? (targetNode.partNo ? `${targetNode.partNo} - ${targetNode.name}` : targetNode.name) : '');
+  }
+
+  if (funcInput && !funcInput.value.trim()) {
+    if (isFocus) {
+      const fl = (ctx.functionLines || []).find(l => l.failureModes && l.failureModes.some(fm => fm.id === activeFailureModeId));
+      const funcObj = fl ? (ctx.functions || []).find(f => f.id === fl.funcId) : null;
+      if (funcObj) funcInput.value = funcObj.name;
+    } else if (targetNode) {
+      const targetFl = (ctx.functionLines || []).find(l => String(l.structId) === String(targetNode.id));
+      const funcObj = targetFl ? (ctx.functions || []).find(f => f.id === targetFl.funcId) : null;
+      if (funcObj) funcInput.value = funcObj.name;
+    }
+  }
+}
+window.onCauseTargetElementChange = onCauseTargetElementChange;
+
+function getDescendantsForCauseLinkage(activeStructId) {
+  const ctx = (typeof getActiveFmeaData === 'function') ? getActiveFmeaData() : fmeaData;
+  const list = [];
+  const seenIds = new Set();
+
+  if (activeStructId) {
+    const structDesc = (typeof getDescendantsOfStructureNode === 'function') ? (getDescendantsOfStructureNode(activeStructId) || []) : [];
+    structDesc.forEach(d => {
+      if (d && d.id && !seenIds.has(String(d.id))) {
+        seenIds.add(String(d.id));
+        list.push(d);
+      }
+    });
+
+    const pf = ctx.pfmea || (ctx.isPFMEA ? ctx : null);
+    if (pf && Array.isArray(pf.workElements)) {
+      pf.workElements.forEach(we => {
+        if ((we.operationId === activeStructId || we.structId === activeStructId || we.stepId === activeStructId) && !seenIds.has(String(we.id))) {
+          seenIds.add(String(we.id));
+          list.push({
+            id: we.id,
+            name: we.category ? `${we.category} (${we.name || we.microActivity || 'Work Element'})` : (we.name || 'Work Element'),
+            partNo: we.code || we.category || '4M',
+            isWorkElement: true,
+            workElement: we
+          });
+        }
+      });
+    }
+  }
+  return list;
+}
 
 function openCauseModal(fmId) {
   if (!checkCanEditFMEA()) return;
@@ -17813,9 +17908,36 @@ function openCauseModal(fmId) {
   const ctx = getActiveFmeaData();
   const linked = (ctx.failureModeCauses || {})[fmId] || [];
   window.activePendingCauseIds = [...linked];
+  window.activeCauseChainFilter = 'ALL';
   const searchInput = document.getElementById('causeSearchInput');
   if (searchInput) searchInput.value = '';
   resetCauseForm();
+
+  const activeStructId = getStructIdForFailureMode(activeFailureModeId);
+  const targetElemSelect = document.getElementById('causeTargetElementSelect');
+  if (targetElemSelect && activeStructId) {
+    const focusNode = getStructureNodeById(ctx.structure, activeStructId);
+    const descendants = getDescendantsForCauseLinkage(activeStructId);
+    let optionsHtml = '';
+    if (focusNode) {
+      const fName = (focusNode.partNo ? `${focusNode.partNo} - ${focusNode.name}` : focusNode.name) || 'Current Focus Element';
+      optionsHtml += `<option value="${focusNode.id}">🏷️ Characteristics (Native Cause: ${escapeHtml(fName)})</option>`;
+    }
+    descendants.forEach(d => {
+      const dName = (d.partNo ? `${d.partNo} - ${d.name}` : d.name) || 'Lower Element';
+      optionsHtml += `<option value="${d.id}">⚙️ Lower Element: ${escapeHtml(dName)}</option>`;
+    });
+    targetElemSelect.innerHTML = optionsHtml;
+    targetElemSelect.value = activeStructId;
+  }
+
+  if (activeStructId) {
+    const elemInput = document.getElementById('causeSystemElement');
+    if (elemInput) {
+      elemInput.value = 'Characteristics';
+    }
+  }
+
   renderCausesLibraryList();
   openModal('causeModal');
 }
@@ -17832,6 +17954,7 @@ window.toggleCauseSelection = toggleCauseSelection;
 
 function renderCausesLibraryList() {
   const container = document.getElementById('causesLibraryContainer');
+  if (!container) return;
   const ctx = getActiveFmeaData();
   const linkedIds = window.activePendingCauseIds || (ctx.failureModeCauses || {})[activeFailureModeId] || [];
 
@@ -17843,38 +17966,112 @@ function renderCausesLibraryList() {
     if (c.module === 'PFMEA' || c.origin === 'PFMEA' || c.isPFMEA === true) return true;
     if (c.id && String(c.id).toLowerCase().includes('pfmea')) return true;
     if (c.workElementId) return true;
-    // NOTE: Do NOT use failureModeCauses here — DFMEA causes are also stored in failureModeCauses,
-    // so iterating it would incorrectly flag DFMEA causes as PFMEA and hide them from the library.
     return false;
   };
 
   let causes = fmeaData.libraries.causes;
   if (!ctx.isPFMEA) {
-    // In DFMEA view, show only DFMEA causes
     causes = causes.filter(c => !isPFMEACause(c));
   } else {
-    // In PFMEA view, show only PFMEA causes
     causes = causes.filter(c => isPFMEACause(c));
   }
 
   const activeStructId = getStructIdForFailureMode(activeFailureModeId);
-  const descendants = activeStructId ? getDescendantsOfStructureNode(activeStructId) : [];
+  const descendants = getDescendantsForCauseLinkage(activeStructId);
   const descendantStructIds = [String(activeStructId), ...descendants.map(d => String(d.id))];
 
-  // Render Hierarchical Descendant Chain Selector Bar
+  // 1. Tag & isolate Native Causes strictly for activeStructId only!
+  const nativeCauses = causes
+    .filter(c => String(c.structId) === String(activeStructId) && !c.isLowerLevelFm)
+    .map(c => ({
+      ...c,
+      isNative: true
+    }));
+
+  // 2. Harvest Lower-Level Failure Modes from all descendant structure nodes
+  const lowerFmMap = {};
+  const lowerFmCauses = [];
+  const seenLowerFmIds = new Set();
+
+  descendants.forEach(dNode => {
+    const dStructId = String(dNode.id);
+    const candidateLines = [...(ctx.functionLines || []), ...(fmeaData.functionLines || [])];
+    const seenFlIds = new Set();
+
+    candidateLines.forEach(fl => {
+      if (!fl || seenFlIds.has(fl.id)) return;
+      const isMatch = (String(fl.structId) === dStructId) || (dNode.workElement && String(fl.workElementId) === dStructId);
+      if (!isMatch) return;
+      seenFlIds.add(fl.id);
+
+      const funcObj = (ctx.functions || fmeaData.functions || []).find(f => f.id === fl.funcId);
+      const reqText = fl.requirement || (funcObj ? funcObj.requirement : '') || '';
+
+      (fl.failureModes || []).forEach(fm => {
+        if (!fm || !fm.id || seenLowerFmIds.has(fm.id)) return;
+        seenLowerFmIds.add(fm.id);
+
+        const synthId = 'cause-fm-chain-' + fm.id;
+        const existingInLib = fmeaData.libraries.causes.find(c => c.id === synthId || c.lowerLevelFmId === fm.id);
+
+        const item = existingInLib ? {
+          ...existingInLib,
+          isLowerLevelFm: true,
+          lowerLevelFmId: fm.id,
+          linkedLowerFmId: fm.id,
+          fmId: fm.id,
+          details: fm.name || fm.failureModeName || existingInLib.details,
+          systemElement: existingInLib.systemElement || (dNode.partNo ? `${dNode.partNo} - ${dNode.name}` : dNode.name),
+          function: existingInLib.function || (funcObj ? funcObj.name : (fl.funcName || 'Lower Function')),
+          requirement: existingInLib.requirement || reqText,
+          structId: dNode.id
+        } : {
+          id: synthId,
+          lowerLevelFmId: fm.id,
+          linkedLowerFmId: fm.id,
+          fmId: fm.id,
+          isLowerLevelFm: true,
+          details: fm.name || fm.failureModeName || 'Lower-level Failure Mode',
+          systemElement: (dNode.partNo ? `${dNode.partNo} - ${dNode.name}` : dNode.name) || 'Lower Element',
+          function: funcObj ? funcObj.name : (fl.funcName || 'Lower Function'),
+          requirement: reqText,
+          structId: dNode.id,
+          occurrence: parseInt(fm.occ, 10) || 4,
+          detection: parseInt(fm.det, 10) || 4,
+          variants: fm.variants || ['ALL'],
+          origin: ctx.isPFMEA ? 'PFMEA' : 'DFMEA',
+          module: ctx.isPFMEA ? 'PFMEA' : 'DFMEA'
+        };
+
+        lowerFmMap[item.id] = item;
+        lowerFmMap[fm.id] = item;
+        lowerFmCauses.push(item);
+      });
+    });
+  });
+
+  window._currentLowerFmMap = lowerFmMap;
+
+  // 3. Render Hierarchical Descendant Chain Selector Bar
   const causeOrderBar = document.getElementById('causeChainOrderBar');
   if (causeOrderBar && activeStructId) {
     const currentFilter = window.activeCauseChainFilter || 'ALL';
     const focusNode = getStructureNodeById(ctx.structure, activeStructId);
-    let barHtml = `<button type="button" class="chain-tab chain-tab-cause ${currentFilter === 'ALL' ? 'active' : ''}" onclick="setCauseChainOrderFilter('ALL')">All Descendants</button>`;
+    let barHtml = `<button type="button" class="chain-tab chain-tab-cause ${currentFilter === 'ALL' ? 'active' : ''}" onclick="setCauseChainOrderFilter('ALL')">All Causes &amp; Lower FMs</button>`;
 
     if (focusNode) {
-      const isFocusActive = (String(currentFilter) === String(focusNode.id));
-      barHtml += `<button type="button" class="chain-tab chain-tab-cause ${isFocusActive ? 'active' : ''}" onclick="setCauseChainOrderFilter('${focusNode.id}')">
-        <span class="chain-step-badge">Focus</span>
-        <span>${escapeHtml(focusNode.name || focusNode.partNo)}</span>
+      const isFocusActive = (String(currentFilter) === 'NATIVE' || String(currentFilter) === String(focusNode.id));
+      barHtml += `<button type="button" class="chain-tab chain-tab-cause ${isFocusActive ? 'active' : ''}" onclick="setCauseChainOrderFilter('NATIVE')">
+        <span class="chain-step-badge" style="background:#059669; color:#fff;">Focus</span>
+        <span>${escapeHtml(focusNode.name || focusNode.partNo)} (Native Causes)</span>
       </button>`;
     }
+
+    const isLowerFmActive = (String(currentFilter) === 'LOWER_FM');
+    barHtml += `<button type="button" class="chain-tab chain-tab-cause ${isLowerFmActive ? 'active' : ''}" onclick="setCauseChainOrderFilter('LOWER_FM')">
+      <span class="chain-step-badge" style="background:#7c3aed; color:#fff;">⛓️ Lower FMs</span>
+      <span>All Lower Failure Modes (${lowerFmCauses.length})</span>
+    </button>`;
 
     descendants.forEach(dNode => {
       const isActive = (String(currentFilter) === String(dNode.id));
@@ -17887,29 +18084,47 @@ function renderCausesLibraryList() {
     causeOrderBar.innerHTML = barHtml;
   }
 
-  // STRICT RELEVANT SYSTEM CHAIN FILTER FOR CAUSES:
-  // Strictly allow causes only from active element and its direct descendants. Parallel branches strictly excluded!
-  if (activeStructId) {
-    causes = causes.filter(c => {
-      if (linkedIds.includes(c.id)) return true;
-      if (!c.structId) return true;
-      return descendantStructIds.includes(String(c.structId));
-    });
+  // 4. Combine Native Causes and Lower-Level Failure Modes
+  const combinedMap = new Map();
+  nativeCauses.forEach(c => {
+    combinedMap.set(c.id, c);
+  });
+  lowerFmCauses.forEach(c => {
+    if (combinedMap.has(c.id)) {
+      combinedMap.set(c.id, { ...combinedMap.get(c.id), ...c, isLowerLevelFm: true });
+    } else {
+      combinedMap.set(c.id, c);
+    }
+  });
 
-    const activeCauseTab = window.activeCauseChainFilter || 'ALL';
-    if (activeCauseTab !== 'ALL') {
-      causes = causes.filter(c => String(c.structId) === String(activeCauseTab) || (!c.structId && String(activeCauseTab) === String(activeStructId)));
+  let displayCauses = Array.from(combinedMap.values());
+
+  // 5. Apply Active Tab Filter
+  const activeCauseTab = window.activeCauseChainFilter || 'ALL';
+  if (activeCauseTab === 'NATIVE') {
+    displayCauses = displayCauses.filter(c => c.isNative && String(c.structId) === String(activeStructId) && !c.isLowerLevelFm);
+  } else if (activeCauseTab === 'LOWER_FM') {
+    displayCauses = displayCauses.filter(c => c.isLowerLevelFm);
+  } else if (activeCauseTab !== 'ALL') {
+    displayCauses = displayCauses.filter(c => String(c.structId) === String(activeCauseTab));
+  } else {
+    if (activeStructId) {
+      displayCauses = displayCauses.filter(c => {
+        if (linkedIds.includes(c.id) || (c.lowerLevelFmId && linkedIds.includes(c.lowerLevelFmId))) return true;
+        if (String(c.structId) === String(activeStructId) && !c.isLowerLevelFm) return true;
+        if (c.isLowerLevelFm && descendantStructIds.includes(String(c.structId))) return true;
+        return false;
+      });
     }
   }
 
-  // Filter by active variant filter
   if (selectedVariantFilter && selectedVariantFilter !== 'ALL') {
-    causes = causes.filter(c => matchesVariantFilter(c.variants || c.variantId, selectedVariantFilter));
+    displayCauses = displayCauses.filter(c => matchesVariantFilter(c.variants || c.variantId, selectedVariantFilter));
   }
 
   const searchQuery = (document.getElementById('causeSearchInput')?.value || '').toLowerCase().trim();
   if (searchQuery) {
-    causes = causes.filter(c =>
+    displayCauses = displayCauses.filter(c =>
       ((c.details || c.desc || c.description || c.name || '') && (c.details || c.desc || c.description || c.name || '').toLowerCase().includes(searchQuery)) ||
       (c.systemElement && c.systemElement.toLowerCase().includes(searchQuery)) ||
       (c.function && c.function.toLowerCase().includes(searchQuery)) ||
@@ -17917,22 +18132,30 @@ function renderCausesLibraryList() {
     );
   }
 
-  // Checked / Unchecked State Filter
   const checkFilter = document.getElementById('causeCheckFilter')?.value || 'ALL';
   if (checkFilter === 'CHECKED') {
-    causes = causes.filter(c => linkedIds.includes(c.id));
+    displayCauses = displayCauses.filter(c => linkedIds.includes(c.id) || (c.lowerLevelFmId && linkedIds.includes(c.lowerLevelFmId)));
   } else if (checkFilter === 'UNCHECKED') {
-    causes = causes.filter(c => !linkedIds.includes(c.id));
+    displayCauses = displayCauses.filter(c => !linkedIds.includes(c.id) && (!c.lowerLevelFmId || !linkedIds.includes(c.lowerLevelFmId)));
   }
 
-  container.innerHTML = causes.map(c => {
-    const isChecked = linkedIds.includes(c.id);
+  container.innerHTML = displayCauses.map(c => {
+    const isChecked = linkedIds.includes(c.id) || (c.lowerLevelFmId && linkedIds.includes(c.lowerLevelFmId));
     const causeText = c.details || c.desc || c.description || c.name || 'Failure Cause';
-    const vdaInfo = [];
-    if (c.systemElement) vdaInfo.push(escapeHtml(c.systemElement));
-    if (c.function) vdaInfo.push(escapeHtml(c.function));
-    if (c.requirement) vdaInfo.push(escapeHtml(c.requirement));
-    const vdaHtml = vdaInfo.length ? `<br><span style="font-size:10px; color:#38bdf8; font-weight:600;">[${vdaInfo.join(' ➔ ')}]</span>` : '';
+
+    const originBadge = c.isLowerLevelFm
+      ? `<span class="badge" style="background:rgba(124, 58, 237, 0.25); border:1px solid #8b5cf6; color:#c4b5fd; font-size:9.5px; padding:1px 6px; margin-right:4px;">⛓️ Lower-Level Failure Mode</span>`
+      : `<span class="badge" style="background:rgba(16, 185, 129, 0.2); border:1px solid #10b981; color:#34d399; font-size:9.5px; padding:1px 6px; margin-right:4px;">🏠 Native Cause</span>`;
+
+    const linkedChars = getLinkedCharacteristicsForCause(c);
+
+    // If native cause: add Characteristics in place of name of element!
+    const sysElemText = formatCauseSystemElementText(c);
+    const vdaParts = [];
+    if (sysElemText) vdaParts.push(escapeHtml(sysElemText));
+    if (c.function) vdaParts.push(escapeHtml(c.function));
+    if (c.requirement) vdaParts.push(escapeHtml(c.requirement));
+    const vdaHtml = vdaParts.length ? `<br><span style="font-size:10px; color:#38bdf8; font-weight:600;">[${vdaParts.join(' ➔ ')}]</span>` : '';
 
     const ratingsInfo = [];
     if (c.occurrence !== undefined && c.occurrence !== null && c.occurrence !== '') ratingsInfo.push(`Occ: ${c.occurrence}`);
@@ -17940,7 +18163,6 @@ function renderCausesLibraryList() {
     if (c.actionPriority) ratingsInfo.push(`AP: ${c.actionPriority}`);
     const ratingsHtml = ratingsInfo.length ? ` <span class="badge" style="background:rgba(245,158,11,0.2); border:1px solid #f59e0b; color:#fbbf24; font-size:9.5px; padding:1px 5px;">${ratingsInfo.join(' | ')}</span>` : '';
 
-    const linkedChars = getLinkedCharacteristicsForCause(c);
     const isPfmea = (fmeaData && fmeaData.activeFmeaType === 'PFMEA') || (c.origin === 'PFMEA' || c.module === 'PFMEA');
     const charsHtml = linkedChars.length > 0
       ? linkedChars.map(ch => {
@@ -17953,22 +18175,28 @@ function renderCausesLibraryList() {
       }).join('')
       : '<span style="color:#64748b; font-size:10px;">No linked characteristics</span>';
 
+    // Exactly matching user request: Chars, Edit, Del
+    const actionButtons = `
+      <button type="button" class="btn btn-sm" style="font-size:10px; font-weight:700; padding:2px 6px; background:#0284c7; color:#fff;" onclick="openLinkCharacteristicsModal('${c.id}')" title="Link / Manage Characteristics">📋 Chars (${linkedChars.length})</button>
+      <button type="button" class="btn btn-sm btn-secondary" style="font-size:10px; padding:2px 6px;" onclick="editLibraryCause('${c.id}')">Edit</button>
+      <button type="button" class="btn btn-sm btn-danger" style="font-size:10px; padding:2px 6px;" onclick="deleteLibraryCause('${c.id}')">Del</button>
+    `;
+
     return `
-      <div class="checkbox-card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px; padding:6px 10px; margin-bottom:4px; border:1px solid ${isChecked ? '#0284c7' : '#334155'}; border-radius:6px;">
+      <div class="checkbox-card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px; padding:6px 10px; margin-bottom:4px; border:1px solid ${isChecked ? '#0284c7' : '#334155'}; background:${isChecked ? 'rgba(2,132,199,0.08)' : 'transparent'}; border-radius:6px;">
         <label style="flex:1; min-width:220px; cursor:pointer; margin:0; color:#f8fafc; font-size:11.5px;">
           <input type="checkbox" id="chk_cause_${c.id}" ${isChecked ? 'checked' : ''} onchange="toggleCauseSelection('${c.id}', this.checked)">
-          <strong style="">${escapeHtml(causeText)}</strong>${ratingsHtml}
+          ${originBadge}
+          <strong>${escapeHtml(causeText)}</strong>${ratingsHtml}
           ${vdaHtml}
           <br><small style="color:#94a3b8; font-size:10px;">Chars: ${charsHtml} | Variant: ${escapeHtml(getVariantNamesDisplay(c.variants || c.variantId))}</small>
         </label>
         <div class="card-actions" style="display:flex; gap:4px; align-items:center;">
-          <button type="button" class="btn btn-sm" style="font-size:10px; font-weight:700; padding:2px 6px; background:#0284c7; color:#fff;" onclick="openLinkCharacteristicsModal('${c.id}')" title="Link / Manage Characteristics">📋 Chars (${linkedChars.length})</button>
-          <button type="button" class="btn btn-sm btn-secondary" style="font-size:10px; padding:2px 6px;" onclick="editLibraryCause('${c.id}')">Edit</button>
-          <button type="button" class="btn btn-sm btn-danger" style="font-size:10px; padding:2px 6px;" onclick="deleteLibraryCause('${c.id}')">Del</button>
+          ${actionButtons}
         </div>
       </div>
     `;
-  }).join('') || '<p class="text-muted" style="padding:12px; color:#94a3b8;">No causes in library matching active filter. Create one on the left.</p>';
+  }).join('') || '<p class="text-muted" style="padding:12px; color:#94a3b8;">No causes or lower-level failure modes matching active filter. Create a native cause on the left or add failure modes to lower-level elements.</p>';
 }
 
 function addCauseToLibrary(e) {
@@ -17980,14 +18208,30 @@ function addCauseToLibrary(e) {
   const charIdsHidden = document.getElementById('causeCharIdsHidden') ? document.getElementById('causeCharIdsHidden').value : '';
   const selectedCharIds = charIdsHidden ? charIdsHidden.split(',').filter(Boolean) : [];
 
-  const systemElement = document.getElementById('causeSystemElement')?.value.trim() || '';
+  const targetStructId = document.getElementById('causeTargetElementSelect')?.value || getStructIdForFailureMode(activeFailureModeId);
+  const activeStructId = getStructIdForFailureMode(activeFailureModeId);
+  let systemElement = document.getElementById('causeSystemElement')?.value.trim() || '';
   const causeFunction = document.getElementById('causeFunction')?.value.trim() || '';
   const causeRequirement = document.getElementById('causeRequirement')?.value.trim() || '';
   const selectedVars = getSelectedVariantsFromCheckboxes('cause');
-  const activeStructId = getStructIdForFailureMode(activeFailureModeId);
+
+  fmeaData.libraries = fmeaData.libraries || {};
+  fmeaData.libraries.causes = fmeaData.libraries.causes || [];
+  fmeaData.libraries.effects = fmeaData.libraries.effects || [];
+
+  const isLowerElement = (String(targetStructId) !== String(activeStructId));
+
+  if (!systemElement) {
+    const focusNode = getStructureNodeById(ctx.structure, activeStructId);
+    systemElement = focusNode ? (focusNode.partNo ? `${focusNode.partNo} - ${focusNode.name}` : focusNode.name) : 'Native Characteristic';
+  }
 
   if (editId) {
-    const item = fmeaData.libraries.causes.find(i => i.id === editId);
+    let item = fmeaData.libraries.causes.find(i => i.id === editId);
+    if (!item && window._currentLowerFmMap && window._currentLowerFmMap[editId]) {
+      item = window._currentLowerFmMap[editId];
+      fmeaData.libraries.causes.push(item);
+    }
     if (item) {
       item.details = details;
       item.characteristicIds = selectedCharIds;
@@ -17996,26 +18240,141 @@ function addCauseToLibrary(e) {
       item.requirement = causeRequirement;
       item.variants = selectedVars;
       item.variantId = selectedVars;
-      if (activeStructId) item.structId = activeStructId;
+      item.isNative = !isLowerElement;
+      if (targetStructId) item.structId = targetStructId;
+
+      const lowerFmId = item.lowerLevelFmId || item.fmId;
+      if (lowerFmId) {
+        (ctx.functionLines || []).forEach(fl => {
+          (fl.failureModes || []).forEach(fm => {
+            if (String(fm.id) === String(lowerFmId)) {
+              fm.name = details;
+            }
+          });
+        });
+      }
     }
   } else {
-    const newCause = {
-      id: (ctx.isPFMEA ? 'lib-cause-pfmea-' : 'lib-cause-dfmea-') + Date.now(),
-      details,
-      characteristicIds: selectedCharIds,
-      systemElement,
-      function: causeFunction,
-      requirement: causeRequirement,
-      variants: selectedVars,
-      variantId: selectedVars,
-      structId: activeStructId,
-      origin: ctx.isPFMEA ? 'PFMEA' : 'DFMEA',
-      module: ctx.isPFMEA ? 'PFMEA' : 'DFMEA'
-    };
-    fmeaData.libraries.causes.push(newCause);
-    if (!window.activePendingCauseIds) window.activePendingCauseIds = [];
-    if (!window.activePendingCauseIds.includes(newCause.id)) window.activePendingCauseIds.push(newCause.id);
+    if (isLowerElement && targetStructId) {
+      ctx.functionLines = ctx.functionLines || [];
+      let targetFl = ctx.functionLines.find(fl => String(fl.structId) === String(targetStructId));
+
+      ctx.functions = ctx.functions || [];
+      let funcObj = null;
+      if (causeFunction) {
+        funcObj = ctx.functions.find(f => f.name && f.name.toLowerCase() === causeFunction.toLowerCase());
+        if (!funcObj) {
+          funcObj = { id: 'fn-' + Date.now(), name: causeFunction };
+          ctx.functions.push(funcObj);
+        }
+      }
+
+      if (!targetFl) {
+        targetFl = {
+          id: 'fl-' + Date.now(),
+          structId: targetStructId,
+          funcId: funcObj ? funcObj.id : (ctx.functions[0]?.id || 'fn-default'),
+          failureModes: []
+        };
+        ctx.functionLines.push(targetFl);
+      } else if (funcObj && targetFl.funcId !== funcObj.id) {
+        targetFl.funcId = funcObj.id;
+      }
+
+      targetFl.failureModes = targetFl.failureModes || [];
+      const focusObj = typeof findFailureModeObjById === 'function' ? findFailureModeObjById(activeFailureModeId) : null;
+      const focusSev = focusObj && focusObj.fm ? (parseInt(focusObj.fm.sev || focusObj.fm.severity, 10) || 7) : 7;
+
+      const lowerFmId = 'fm-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
+      const newLowerFm = {
+        id: lowerFmId,
+        name: details,
+        occ: 4,
+        det: 4,
+        sev: focusSev,
+        variants: selectedVars || ['ALL']
+      };
+      targetFl.failureModes.push(newLowerFm);
+
+      const focusEffectId = 'eff-chain-fm-' + activeFailureModeId;
+      let focusEff = fmeaData.libraries.effects.find(e => e.id === focusEffectId || e.parentFmId === activeFailureModeId);
+      if (!focusEff && focusObj && focusObj.fm) {
+        focusEff = {
+          id: focusEffectId,
+          parentFmId: activeFailureModeId,
+          targetFmId: activeFailureModeId,
+          desc: focusObj.fm.name || 'Focus Failure Mode',
+          details: focusObj.fm.name || 'Focus Failure Mode',
+          name: focusObj.fm.name || 'Focus Failure Mode',
+          severity: focusSev,
+          category: 'Next Higher Level (Focus Element Failure Mode)',
+          systemElement: focusObj.structName || '',
+          function: focusObj.funcName || '',
+          requirement: focusObj.reqText || '',
+          origin: ctx.isPFMEA ? 'PFMEA' : 'DFMEA',
+          module: ctx.isPFMEA ? 'PFMEA' : 'DFMEA',
+          variants: focusObj.fm.variants || ['ALL']
+        };
+        fmeaData.libraries.effects.push(focusEff);
+      }
+
+      ctx.failureModeEffects = ctx.failureModeEffects || {};
+      if (focusEff) {
+        ctx.failureModeEffects[lowerFmId] = [focusEff.id];
+      }
+
+      const synthCauseId = 'cause-fm-chain-' + lowerFmId;
+      const newCause = {
+        id: synthCauseId,
+        lowerLevelFmId: lowerFmId,
+        linkedLowerFmId: lowerFmId,
+        fmId: lowerFmId,
+        isLowerLevelFm: true,
+        details: details,
+        characteristicIds: selectedCharIds,
+        systemElement: systemElement,
+        function: causeFunction,
+        requirement: causeRequirement,
+        variants: selectedVars,
+        variantId: selectedVars,
+        structId: targetStructId,
+        isNative: false,
+        origin: ctx.isPFMEA ? 'PFMEA' : 'DFMEA',
+        module: ctx.isPFMEA ? 'PFMEA' : 'DFMEA'
+      };
+      fmeaData.libraries.causes.push(newCause);
+
+      if (!window.activePendingCauseIds) window.activePendingCauseIds = [];
+      if (!window.activePendingCauseIds.includes(synthCauseId)) {
+        window.activePendingCauseIds.push(synthCauseId);
+      }
+      if (window._currentLowerFmMap) {
+        window._currentLowerFmMap[synthCauseId] = newCause;
+        window._currentLowerFmMap[lowerFmId] = newCause;
+      }
+    } else {
+      const newCause = {
+        id: (ctx.isPFMEA ? 'lib-cause-pfmea-' : 'lib-cause-dfmea-') + Date.now(),
+        details,
+        characteristicIds: selectedCharIds,
+        systemElement: 'Characteristics',
+        function: causeFunction,
+        requirement: causeRequirement,
+        variants: selectedVars,
+        variantId: selectedVars,
+        structId: activeStructId,
+        isNative: true,
+        origin: ctx.isPFMEA ? 'PFMEA' : 'DFMEA',
+        module: ctx.isPFMEA ? 'PFMEA' : 'DFMEA'
+      };
+      fmeaData.libraries.causes.push(newCause);
+      if (!window.activePendingCauseIds) window.activePendingCauseIds = [];
+      if (!window.activePendingCauseIds.includes(newCause.id)) window.activePendingCauseIds.push(newCause.id);
+    }
   }
+
+  if (typeof markDataChanged === 'function') markDataChanged('Added/Updated Cause');
+  if (typeof saveProjectToLocalStorage === 'function') saveProjectToLocalStorage();
 
   resetCauseForm();
   renderCausesLibraryList();
@@ -18023,9 +18382,13 @@ function addCauseToLibrary(e) {
 }
 
 function editLibraryCause(id) {
-  const item = fmeaData.libraries.causes.find(i => i.id === id);
+  let item = fmeaData.libraries.causes.find(i => i.id === id);
+  if (!item && window._currentLowerFmMap && window._currentLowerFmMap[id]) {
+    item = window._currentLowerFmMap[id];
+  }
   if (!item) return;
-  document.getElementById('causeDetails').value = item.details || '';
+
+  document.getElementById('causeDetails').value = item.details || item.desc || item.name || '';
 
   const charIds = item.characteristicIds || [];
   if (document.getElementById('causeCharIdsHidden')) document.getElementById('causeCharIdsHidden').value = charIds.join(',');
@@ -18034,6 +18397,11 @@ function editLibraryCause(id) {
   if (document.getElementById('causeSystemElement')) document.getElementById('causeSystemElement').value = item.systemElement || '';
   if (document.getElementById('causeFunction')) document.getElementById('causeFunction').value = item.function || '';
   if (document.getElementById('causeRequirement')) document.getElementById('causeRequirement').value = item.requirement || '';
+
+  const targetElemSelect = document.getElementById('causeTargetElementSelect');
+  if (targetElemSelect && item.structId) {
+    targetElemSelect.value = item.structId;
+  }
 
   let hidden = document.getElementById('causeEditId');
   if (!hidden) {
@@ -18052,14 +18420,15 @@ function editLibraryCause(id) {
 
 async function deleteLibraryCause(id) {
   const ctx = getActiveFmeaData();
-  const cObj = (fmeaData.libraries?.causes || []).find(c => c.id === id);
+  const cObj = (fmeaData.libraries?.causes || []).find(c => c.id === id) || (window._currentLowerFmMap && window._currentLowerFmMap[id]);
   if (ctx.isPFMEA && cObj && (cObj.origin === 'DFMEA' || cObj.module === 'DFMEA' || cObj.dfmeaCauseId || String(cObj.id).startsWith('lib-cause-dfmea'))) {
     alert("DFMEA Synced Causes cannot be deleted from PFMEA mode. They must be managed in DFMEA mode.");
     return;
   }
   const isConfirmed = await showCustomConfirm("Delete this cause from the master library?", "Delete Cause", "warning");
   if (!isConfirmed) return;
-  fmeaData.libraries.causes = fmeaData.libraries.causes.filter(i => i.id !== id);
+
+  fmeaData.libraries.causes = (fmeaData.libraries.causes || []).filter(i => i.id !== id);
   if (window.activePendingCauseIds) {
     window.activePendingCauseIds = window.activePendingCauseIds.filter(cId => cId !== id);
   }
@@ -18068,6 +18437,26 @@ async function deleteLibraryCause(id) {
       ctx.failureModeCauses[k] = ctx.failureModeCauses[k].filter(cId => cId !== id);
     });
   }
+
+  const lowerFmId = cObj ? (cObj.lowerLevelFmId || cObj.fmId) : null;
+  if (lowerFmId) {
+    (ctx.functionLines || []).forEach(fl => {
+      if (fl.failureModes) {
+        fl.failureModes = fl.failureModes.filter(m => String(m.id) !== String(lowerFmId));
+      }
+    });
+    if (ctx.failureModeEffects && ctx.failureModeEffects[lowerFmId]) {
+      delete ctx.failureModeEffects[lowerFmId];
+    }
+    if (window._currentLowerFmMap) {
+      delete window._currentLowerFmMap[id];
+      delete window._currentLowerFmMap[lowerFmId];
+    }
+  }
+
+  if (typeof markDataChanged === 'function') markDataChanged('Cause Deleted');
+  if (typeof saveProjectToLocalStorage === 'function') saveProjectToLocalStorage();
+
   renderCausesLibraryList();
   renderFMEATable();
 }
@@ -18076,20 +18465,110 @@ function applySelectedCauses() {
   if (!checkCanEditFMEA()) return;
   const ctx = getActiveFmeaData();
   ctx.failureModeCauses = ctx.failureModeCauses || {};
-  ctx.failureModeCauses[activeFailureModeId] = [...(window.activePendingCauseIds || [])];
-  if (typeof markDataChanged === 'function') markDataChanged('Causes Linkage Updated');
+  ctx.failureModeEffects = ctx.failureModeEffects || {};
+
+  fmeaData.libraries = fmeaData.libraries || {};
+  fmeaData.libraries.causes = fmeaData.libraries.causes || [];
+  fmeaData.libraries.effects = fmeaData.libraries.effects || [];
+
+  const focusObj = typeof findFailureModeObjById === 'function' ? findFailureModeObjById(activeFailureModeId) : null;
+  const focusSev = focusObj && focusObj.fm
+    ? (parseInt(focusObj.fm.sev || focusObj.fm.severity, 10) || (typeof getEffectiveSeverityForFailureMode === 'function' ? getEffectiveSeverityForFailureMode(activeFailureModeId) : 7) || 7)
+    : 7;
+
+  const focusEffectId = 'eff-chain-fm-' + activeFailureModeId;
+  let focusEff = fmeaData.libraries.effects.find(e => e.id === focusEffectId || e.parentFmId === activeFailureModeId);
+  if (focusObj && focusObj.fm) {
+    if (!focusEff) {
+      focusEff = {
+        id: focusEffectId,
+        parentFmId: activeFailureModeId,
+        targetFmId: activeFailureModeId,
+        desc: focusObj.fm.name || 'Focus Failure Mode',
+        details: focusObj.fm.name || 'Focus Failure Mode',
+        name: focusObj.fm.name || 'Focus Failure Mode',
+        severity: focusSev,
+        category: 'Next Higher Level (Focus Element Failure Mode)',
+        systemElement: focusObj.structName || '',
+        function: focusObj.funcName || '',
+        requirement: focusObj.reqText || '',
+        origin: ctx.isPFMEA ? 'PFMEA' : 'DFMEA',
+        module: ctx.isPFMEA ? 'PFMEA' : 'DFMEA',
+        variants: focusObj.fm.variants || ['ALL']
+      };
+      fmeaData.libraries.effects.push(focusEff);
+    } else {
+      focusEff.desc = focusObj.fm.name;
+      focusEff.details = focusObj.fm.name;
+      focusEff.name = focusObj.fm.name;
+      focusEff.severity = focusSev;
+      focusEff.systemElement = focusObj.structName || '';
+      focusEff.function = focusObj.funcName || '';
+    }
+  }
+
+  const pendingIds = window.activePendingCauseIds || [];
+  const normalizedPendingIds = [];
+  const currentlyLinkedLowerFmIds = new Set();
+
+  pendingIds.forEach(id => {
+    let finalId = id;
+    if (window._currentLowerFmMap && window._currentLowerFmMap[id]) {
+      const candidate = window._currentLowerFmMap[id];
+      finalId = candidate.id;
+      const lowerFmId = candidate.lowerLevelFmId || candidate.fmId;
+      if (lowerFmId) currentlyLinkedLowerFmIds.add(lowerFmId);
+
+      const existing = fmeaData.libraries.causes.find(c => c.id === candidate.id || (candidate.lowerLevelFmId && c.lowerLevelFmId === candidate.lowerLevelFmId));
+      if (!existing) {
+        fmeaData.libraries.causes.push({ ...candidate });
+      } else {
+        existing.details = candidate.details;
+        existing.systemElement = candidate.systemElement;
+        existing.function = candidate.function;
+        existing.requirement = candidate.requirement;
+        existing.lowerLevelFmId = candidate.lowerLevelFmId;
+        existing.linkedLowerFmId = candidate.linkedLowerFmId;
+        existing.isLowerLevelFm = true;
+      }
+    }
+    if (!normalizedPendingIds.includes(finalId)) normalizedPendingIds.push(finalId);
+  });
+
+  if (focusEff) {
+    currentlyLinkedLowerFmIds.forEach(lowerFmId => {
+      const curEffs = ctx.failureModeEffects[lowerFmId] || [];
+      if (!curEffs.includes(focusEff.id)) {
+        ctx.failureModeEffects[lowerFmId] = [...curEffs, focusEff.id];
+      }
+    });
+
+    const previousCauseIds = ctx.failureModeCauses[activeFailureModeId] || [];
+    previousCauseIds.forEach(prevId => {
+      if (window._currentLowerFmMap && window._currentLowerFmMap[prevId]) {
+        const candidate = window._currentLowerFmMap[prevId];
+        const lowerFmId = candidate.lowerLevelFmId || candidate.fmId;
+        if (lowerFmId && !currentlyLinkedLowerFmIds.has(lowerFmId)) {
+          const curEffs = ctx.failureModeEffects[lowerFmId] || [];
+          ctx.failureModeEffects[lowerFmId] = curEffs.filter(eId => eId !== focusEff.id);
+        }
+      }
+    });
+  }
+
+  ctx.failureModeCauses[activeFailureModeId] = [...normalizedPendingIds];
+  if (typeof markDataChanged === 'function') markDataChanged('Causes & Effects Linkage Updated');
   window._fmeaDataDirty = true;
+  if (typeof saveProjectToLocalStorage === 'function') saveProjectToLocalStorage();
+  if (typeof renderFMEATable === 'function') renderFMEATable();
   closeModal('causeModal');
   if (typeof refreshActiveFailureNetworkIfOpen === 'function') {
     refreshActiveFailureNetworkIfOpen();
   }
+  if (typeof showToast === 'function') {
+    showToast("Failure Causes & Failure Chain Effects updated successfully.", "success");
+  }
 }
-
-// ----------------------------------------------------
-// 19. Controls Library Modal (With Edit & Delete)
-// ----------------------------------------------------
-window.showAllControlsVariants = false;
-window.showAllActionsVariants = false;
 
 function toggleShowAllControlsVariants(checked) {
   window.showAllControlsVariants = checked;
@@ -21668,11 +22147,56 @@ function formatEffectDetailsFullString(e, currFmId = null) {
 function formatCauseDetailsFullString(cause) {
   if (!cause) return '';
   const parts = [];
-  if (cause.systemElement) parts.push(cause.systemElement);
+  const sysElem = formatCauseSystemElementText(cause);
+  if (sysElem) parts.push(sysElem);
   if (cause.function) parts.push(cause.function);
   if (cause.requirement) parts.push(cause.requirement);
   parts.push(cause.details || '');
   return parts.join('\n');
+}
+
+function isCauseCharacteristics(cause) {
+  if (!cause) return false;
+  if (cause.isNative) return true;
+  if (Array.isArray(cause.characteristicIds) && cause.characteristicIds.length > 0) return true;
+  if (typeof cause.characteristicIds === 'string' && cause.characteristicIds.trim().length > 0) return true;
+  if (cause.characteristics && typeof cause.characteristics === 'string' && cause.characteristics.trim() && cause.characteristics.trim() !== '-' && cause.characteristics.trim() !== 'None') return true;
+  if (cause.characteristic && typeof cause.characteristic === 'string' && cause.characteristic.trim() && cause.characteristic.trim() !== '-' && cause.characteristic.trim() !== 'None') return true;
+  if (typeof getLinkedCharacteristicsForCause === 'function') {
+    try {
+      const linked = getLinkedCharacteristicsForCause(cause);
+      if (linked && linked.length > 0) return true;
+    } catch (e) {}
+  }
+  return false;
+}
+
+function formatCauseSystemElementText(cause) {
+  if (!cause) return '';
+  if (cause.isNative) {
+    return 'Characteristics';
+  }
+
+  let sysElem = (cause.systemElement || '').trim();
+  if (!sysElem && cause.structId) {
+    const ctx = (typeof getActiveFmeaData === 'function') ? getActiveFmeaData() : (typeof fmeaData !== 'undefined' ? fmeaData : null);
+    const node = (ctx && typeof getStructureNodeById === 'function') ? getStructureNodeById(ctx.structure, cause.structId) : null;
+    if (node) {
+      sysElem = (node.partNo ? `${node.partNo} - ${node.name}` : node.name) || '';
+    }
+  }
+
+  if (isCauseCharacteristics(cause)) {
+    if (sysElem) {
+      if (!sysElem.toLowerCase().includes('characteristic')) {
+        sysElem = `${sysElem} (Characteristics)`;
+      }
+    } else {
+      sysElem = 'Characteristics';
+    }
+  }
+
+  return sysElem;
 }
 
 function buildColoredHierarchyTag(system, func, req) {
@@ -21698,11 +22222,11 @@ function formatRPNBadgeHTML(s, occ, det, isVDA) {
 
   if (isVDA) {
     const rawAp = typeof evalRiskCategory === 'function' ? evalRiskCategory(sNum, rpnVal, 100, 50, 40) : (sNum >= 9 || rpnVal >= 100 ? 'H' : (sNum >= 7 || rpnVal >= 50 ? 'M' : 'L'));
-    const apVal = (rawAp === 'H' ? 'High (H)' : (rawAp === 'M' ? 'Medium (M)' : (rawAp === 'L' ? 'Low (L)' : String(rawAp))));
+    const apVal = (rawAp === 'H' ? 'H' : (rawAp === 'M' ? 'M' : 'L'));
     let bg = '#dcfce7', color = '#166534', border = '#86efac';
-    if (apVal.startsWith('High') || apVal.includes('(H)') || rawAp === 'H') {
+    if (apVal === 'H') {
       bg = '#fee2e2'; color = '#991b1b'; border = '#f87171';
-    } else if (apVal.startsWith('Medium') || apVal.includes('(M)') || rawAp === 'M') {
+    } else if (apVal === 'M') {
       bg = '#fef3c7'; color = '#92400e'; border = '#fbbf24';
     }
     return `<span style="background:${bg} !important; color:${color} !important; border:1px solid ${border} !important; font-weight:bold; padding:2px 5px; border-radius:4px; font-size:10px; display:inline-block; -webkit-print-color-adjust:exact;">${apVal}</span>`;
@@ -21714,7 +22238,8 @@ function formatRPNBadgeHTML(s, occ, det, isVDA) {
 
 function renderCauseFormattedCell(cause, idx, diffObj = null) {
   if (!cause) return '-';
-  const sysTag = buildColoredHierarchyTag(cause.systemElement, cause.function, cause.requirement);
+  const sysElem = formatCauseSystemElementText(cause);
+  const sysTag = buildColoredHierarchyTag(sysElem, cause.function, cause.requirement);
   const numLabel = (typeof idx === 'number') ? `${idx + 1}.` : '1.';
   const descText = cause.details || cause.desc || cause.name || cause.text || '';
   let formattedDesc = escapeHtml(descText);
@@ -36903,7 +37428,7 @@ function buildScopeTableRowsHTML(scope, nodeIds, targetVariant) {
         const causeNum = linkedCauses.length > 1 ? `${cIdx + 1}. ` : '';
         const causeDetailsStr = `${causeNum}<strong>${escapeHtml(formatCleanCellText(cause.details || ''))}</strong>`;
 
-        const rawCauseElem = (cause.systemElement || cause.workElement || cause.processStep || '').trim();
+        const rawCauseElem = formatCauseSystemElementText(cause) || (cause.workElement || cause.processStep || '').trim();
         const causeWorkElemStr = (rawCauseElem && rawCauseElem !== '-' && !rawCauseElem.toLowerCase().includes('(click to edit)'))
           ? formatCleanCellText(rawCauseElem)
           : '-';
@@ -61476,8 +62001,13 @@ function toggleFunctionChainLink(funcId) {
 }
 
 function resetFuncChainForm() {
+  const systemSelect = document.getElementById('funcChainSystemSelect');
+  const prevStructVal = systemSelect ? systemSelect.value : null;
   const form = document.getElementById('funcChainForm');
   if (form) form.reset();
+  if (systemSelect && prevStructVal) {
+    systemSelect.value = prevStructVal;
+  }
   const editId = document.getElementById('funcChainEditId');
   if (editId) editId.value = '';
   const btn = document.getElementById('funcChainSubmitBtn');

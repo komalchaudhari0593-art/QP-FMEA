@@ -5631,10 +5631,12 @@
                 <div style="display: flex; flex-direction: column; gap: 4px;">
                   <div>
                     <label
-                      style="font-size: 9.5px; font-weight: 700; color: #cbd5e1; display: block; margin-bottom: 2px;">Lower
-                      Level System Element / Station</label>
-                    <input type="text" id="causeSystemElement" placeholder="e.g. Fastener Subassembly / Station 10"
-                      style="width: 100%; padding: 3px 8px; font-size: 11px; height: 26px; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px;">
+                      style="font-size: 9.5px; font-weight: 700; color: #cbd5e1; display: block; margin-bottom: 2px;">Target
+                      Alignment / Cause Source</label>
+                    <select id="causeTargetElementSelect" onchange="onCauseTargetElementChange(this.value)"
+                      style="width: 100%; padding: 3px 8px; font-size: 11px; height: 26px; background: #0f172a; color: #fff; border: 1px solid #475569; border-radius: 4px;">
+                    </select>
+                    <input type="hidden" id="causeSystemElement" value="">
                   </div>
                   <div>
                     <label
